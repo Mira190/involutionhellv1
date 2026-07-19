@@ -11,6 +11,7 @@ lang: en
 translatedFrom: zh
 translatedAt: 2026-04-15T08:00:00Z
 translatorAgent: claude-sonnet-4-6
+sourcePath: "content/docs/career/events/event-takeway.md"
 ---
 
 In the Career Events Recap Hub, we systematically compile the **highlights and key takeaways** from each job-search-related event, including:

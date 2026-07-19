@@ -9,6 +9,7 @@ lang: en
 translatedFrom: zh
 translatedAt: 2026-05-11T00:00:00Z
 translatorAgent: claude-sonnet-4-6
+sourcePath: "content/docs/learn/ai/reinforcement-learning/ppo.md"
 ---
 
 # PPO

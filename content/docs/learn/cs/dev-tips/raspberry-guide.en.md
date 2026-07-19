@@ -8,6 +8,7 @@ lang: en
 translatedFrom: zh
 translatedAt: 2026-04-15T12:00:00Z
 translatorAgent: claude-sonnet-4-6
+sourcePath: "content/docs/learn/cs/dev-tips/raspberry-guide.md"
 ---
 
 A walkthrough of setting up a Raspberry Pi Minecraft server from scratch and exposing it to the internet using FRP port forwarding.

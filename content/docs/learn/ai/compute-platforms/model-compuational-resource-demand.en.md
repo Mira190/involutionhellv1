@@ -9,6 +9,7 @@ lang: en
 translatedFrom: zh
 translatedAt: 2026-04-15T12:00:00Z
 translatorAgent: claude-sonnet-4-6
+sourcePath: "content/docs/learn/ai/compute-platforms/model-compuational-resource-demand.md"
 ---
 
 # Notes on Multi-GPU Training of Large Models
