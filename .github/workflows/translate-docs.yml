@@ -1,0 +1,92 @@
+name: Translate Docs
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Write .en files + TM and push a sync commit (unchecked = dry-run plan)"
+        type: boolean
+        default: true
+  schedule:
+    - cron: "0 3 * * 1"
+
+concurrency:
+  group: translate-docs
+  cancel-in-progress: false
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      APPLY_RUN: ${{ (github.event_name == 'schedule' || inputs.apply) && '1' || '' }}
+    steps:
+      # MOCK: 按模拟签核假定 ANTHROPIC_API_KEY 已在仓库 secrets 配好；真实
+      # provision 前该 job 检测到空 secret 会打印跳过原因并以成功状态退出
+      - name: Gate on ANTHROPIC_API_KEY
+        id: gate
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY secret is not provisioned — skipping translation sync (no-op, exit 0)."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          fetch-depth: 0
+
+      - name: Enable Corepack
+        if: steps.gate.outputs.run == 'true'
+        run: corepack enable
+
+      - uses: pnpm/action-setup@v4
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+        if: steps.gate.outputs.run == 'true'
+
+      - name: Translate changed segments
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          if [ "$APPLY_RUN" = "1" ]; then
+            APPLY=1 TRANSLATE_MAX_UNITS=${{ vars.TRANSLATE_MAX_UNITS || 200 }} pnpm translate:docs
+          else
+            pnpm translate:docs
+          fi
+
+      - name: Quality-gate the bot's own output (changed pairs, strict)
+        if: steps.gate.outputs.run == 'true' && env.APPLY_RUN == '1'
+        run: |
+          git add -N content/docs
+          if git diff --quiet HEAD -- content/docs; then
+            echo "no doc changes to gate"
+          else
+            git diff --name-only HEAD -- content/docs \
+              | grep -E '\.(md|mdx)$' \
+              | xargs -r -d '\n' pnpm check:translations:quality --strict --changed
+          fi
+
+      - name: Commit and push
+        if: steps.gate.outputs.run == 'true' && env.APPLY_RUN == '1'
+        run: |
+          git add content/docs generated/translation-memory.json generated/translation-conflicts.md
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(i18n): 增量翻译同步 [translation-sync] [skip ci]"
+          git push || { git pull --rebase && git push; }
