@@ -15,6 +15,7 @@
     "migrate:images": "node scripts/move-doc-images.mjs",
     "docs:sync-cuid": "node scripts/uuid.mjs",
     "translate:docs": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/translate-docs.mjs",
+    "check:translations:quality": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-translation-quality.mjs",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "typecheck": "tsc --noEmit",

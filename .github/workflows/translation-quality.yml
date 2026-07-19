@@ -1,0 +1,39 @@
+name: Translation Quality
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - "content/docs/**"
+
+jobs:
+  check-translation-quality:
+    runs-on: ubuntu-latest
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      # Changed-only so the legacy corpus's pre-existing findings don't block
+      # unrelated PRs; strict so new errors in touched pairs fail the check.
+      - name: Check translation quality (changed pairs, strict)
+        run: pnpm check:translations:quality --strict
+        env:
+          CHANGED_ONLY: "1"
+          DIFF_BASE: origin/${{ github.base_ref }}

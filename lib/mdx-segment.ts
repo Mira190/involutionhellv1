@@ -41,6 +41,63 @@ const FENCE_OPEN_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const FENCE_CLOSE_RE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
 const ATX_RE = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$/;
 
+export interface CodeFence {
+  info: string;
+  content: string;
+  openLine: number;
+  closeLine: number;
+}
+
+export function extractFences(body: string): CodeFence[] {
+  const lines = body.split("\n");
+  const fences: CodeFence[] = [];
+  let open: {
+    char: string;
+    len: number;
+    info: string;
+    openLine: number;
+    inner: string[];
+  } | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (open) {
+      const close = line.match(FENCE_CLOSE_RE);
+      if (close && close[1][0] === open.char && close[1].length >= open.len) {
+        fences.push({
+          info: open.info,
+          content: open.inner.join("\n"),
+          openLine: open.openLine,
+          closeLine: i + 1,
+        });
+        open = null;
+      } else {
+        open.inner.push(line);
+      }
+      continue;
+    }
+    const m = line.match(FENCE_OPEN_RE);
+    if (m && !(m[1][0] === "`" && m[2].includes("`"))) {
+      open = {
+        char: m[1][0],
+        len: m[1].length,
+        info: m[2].trim(),
+        openLine: i + 1,
+        inner: [],
+      };
+    }
+  }
+  if (open !== null) {
+    fences.push({
+      info: open.info,
+      content: open.inner.join("\n"),
+      openLine: open.openLine,
+      closeLine: lines.length,
+    });
+  }
+  return fences;
+}
+
 function headingText(raw: string | undefined): string {
   if (!raw) return "";
   return raw.replace(/[ \t]+#+[ \t]*$/, "").trim();
