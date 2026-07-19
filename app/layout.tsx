@@ -18,6 +18,7 @@ const geistMono = localFont({
 });
 
 import { SITE_URL } from "@/lib/site-url";
+import { RSS_FEEDS } from "@/lib/rss";
 import { safeJsonLdString } from "@/lib/json-ld";
 const en_description =
   "内卷地狱（Involution Hell）是一个由开发者发起的开源学习社区，专注算法、系统设计、工程实践与技术分享，帮助华人程序员高效成长，专注真实进步。Involution Hell is an open-source community empowering builders with real-world engineering.";
@@ -186,6 +187,20 @@ export default function RootLayout({
               })();
             `,
           }}
+        />
+        {/* RSS 用手写 <link> 而非 metadata alternates.types：子页面的
+            generateMetadata 会整体覆盖 alternates，types 在 docs 页会丢 */}
+        <link
+          rel="alternate"
+          type="application/rss+xml"
+          title={RSS_FEEDS.zh.title}
+          href={RSS_FEEDS.zh.path}
+        />
+        <link
+          rel="alternate"
+          type="application/rss+xml"
+          title={RSS_FEEDS.en.title}
+          href={RSS_FEEDS.en.path}
         />
         {/* 预连接：缩短关键请求链 */}
         <link rel="preconnect" href="https://www.google-analytics.com" />
