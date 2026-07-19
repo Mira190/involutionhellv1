@@ -26,6 +26,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import { extractImageUrls, rewriteImageRefs } from "./lib/image-refs.mjs";
 
 // 仓库根目录、文档目录与 public 目录
 const ROOT = process.cwd();
@@ -69,17 +70,12 @@ function sha1(p) {
  * 构建引用表：统计所有文档对 `/images/...`（排除站点级前缀）的引用次数
  */
 function buildRefs() {
-  const mdxImg = /!\[[^\]]*\]\(([^)]+)\)/g;
-  const htmlImg = /<img[^>]*src=["']([^"']+)["'][^>]*>/gi;
   /** @type {Map<string, Set<string>>} url -> set of files */
   const refs = new Map();
   for (const f of walk(DOCS_DIR)) {
     if (!exts.has(path.extname(f))) continue;
     const content = read(f);
-    const urls = new Set();
-    for (const m of content.matchAll(mdxImg)) urls.add(m[1]);
-    for (const m of content.matchAll(htmlImg)) urls.add(m[1]);
-    for (const url of urls) {
+    for (const url of extractImageUrls(content)) {
       if (!url.startsWith("/")) continue;
       if (EXCLUDE_PREFIXES.some((p) => url.startsWith(p))) continue;
       if (!refs.has(url)) refs.set(url, new Set());
@@ -97,13 +93,7 @@ function buildRefs() {
 function moveForFile(file, refs) {
   const raw = fs.readFileSync(file, "utf8");
   let content = raw;
-  // Markdown 图片语法：![alt](src)
-  const mdxImg = /!\[[^\]]*\]\(([^)]+)\)/g;
-  // HTML 图片语法：<img src="..." />
-  const htmlImg = /<img[^>]*src=["']([^"']+)["'][^>]*>/gi;
-  const urls = new Set();
-  for (const m of content.matchAll(mdxImg)) urls.add(m[1]);
-  for (const m of content.matchAll(htmlImg)) urls.add(m[1]);
+  const urls = new Set(extractImageUrls(content));
 
   if (urls.size === 0) return { moved: 0, updated: false };
   let moved = 0;
@@ -170,12 +160,9 @@ function moveForFile(file, refs) {
       moved++;
     }
 
-    // 将文中的绝对路径替换为相对路径 ./images/<文件名>
+    // 将文中的绝对路径替换为相对路径 ./<basename>.assets/<文件名>
     const rel = `./${baseName}.assets/${base}`;
-    // 转义正则中的特殊字符，确保全量替换
-    const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(escaped, "g");
-    content = content.replace(re, rel);
+    content = rewriteImageRefs(content, new Map([[url, rel]]));
   }
 
   // 额外处理：将历史相对路径 ./images/* 迁移至 ./<basename>.assets/* 并更新引用
@@ -215,9 +202,7 @@ function moveForFile(file, refs) {
     }
     moved++;
     const newRel = `./${baseName}.assets/${base}`;
-    const escapedRel = url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const reRel = new RegExp(escapedRel, "g");
-    content = content.replace(reRel, newRel);
+    content = rewriteImageRefs(content, new Map([[url, newRel]]));
   }
 
   if (content !== raw) fs.writeFileSync(file, content);
