@@ -5,7 +5,7 @@ import { ensureSeoDescription } from "@/lib/seo-description";
 import { DocsPage, DocsBody } from "fumadocs-ui/page";
 import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
-import { setRequestLocale } from "next-intl/server";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 import { hasLocale } from "next-intl";
 import { getMDXComponents } from "@/mdx-components";
 import { GiscusComments } from "@/app/components/GiscusComments";
@@ -23,6 +23,27 @@ import { DocHistoryPanel } from "@/app/components/DocHistoryPanel";
 import { DocShareButton } from "@/app/components/DocShareButton";
 import { routing } from "@/i18n/routing";
 import { type PageData } from "@/app/types/doc";
+import Link from "next/link";
+import {
+  getRelatedDocs,
+  normalizeTags,
+  type RelatedCandidate,
+} from "@/lib/related-docs";
+
+function toRelatedCandidate(
+  p: ReturnType<typeof source.getPages>[number],
+): RelatedCandidate {
+  const data = p.data as PageData;
+  return {
+    path: p.file.path,
+    slugs: p.slugs,
+    title: data.title ?? "",
+    tags: normalizeTags(
+      data.frontmatter?.tags ?? (data as { tags?: unknown }).tags,
+    ),
+    docId: data.docId ?? data.frontmatter?.docId,
+  };
+}
 
 // 优先用 BACKEND_URL（本地开发/Vercel 配置），兜底用生产地址避免 localhost 连不上
 const BACKEND_URL = process.env.BACKEND_URL ?? "https://api.involutionhell.com";
@@ -109,6 +130,15 @@ export default async function DocPage({ params }: Param) {
     }
     notFound();
   }
+
+  const relatedDocs = getRelatedDocs(
+    toRelatedCandidate(page),
+    source.getPages(locale).map(toRelatedCandidate),
+  );
+  const relatedTitle =
+    relatedDocs.length > 0
+      ? (await getTranslations("relatedDocs"))("title")
+      : null;
 
   // 统一通过工具函数生成 Edit 链接，内部已处理中文目录编码
   const editUrl = buildDocsEditUrl(page.path);
@@ -198,6 +228,23 @@ export default async function DocPage({ params }: Param) {
           <Mdx components={getMDXComponents()} />
           <Contributors entry={contributorsEntry} />
           <PageFeedback />
+          {relatedDocs.length > 0 && (
+            <section className="mt-12">
+              <h2 className="mb-4 text-lg font-bold">{relatedTitle}</h2>
+              <ul className="grid gap-3 sm:grid-cols-2">
+                {relatedDocs.map((r) => (
+                  <li key={r.slugs.join("/")}>
+                    <Link
+                      href={`/${locale}/docs/${r.slugs.join("/")}`}
+                      className="block rounded-md border border-border px-4 py-3 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      {r.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           <section className="mt-16">
             <GiscusComments docId={docIdFromPage ?? null} />
           </section>

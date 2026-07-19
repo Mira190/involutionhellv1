@@ -466,5 +466,8 @@
   },
   "shareLink": {
     "button": "丢个链接"
+  },
+  "relatedDocs": {
+    "title": "相关文章"
   }
 }
