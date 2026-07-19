@@ -470,3 +470,28 @@ persona 只是 4 个提示词皮肤。**
 两个跨计划的公共模块顺序敏感，先到先建，后者复用：
 `lib/mdx-segment.ts`（remark heading 分块，翻译流水线与 RAG 共用）、
 `createLimiter` 工厂（#94 与 RAG retrieve 共用）。
+
+---
+
+## 附录：全站增强扫描与新立 issue（2026-07-19）
+
+对 issue 清单之外做了一轮全站扫描（安全头 / SEO 面 / 阅读体验 / 感知
+性能 / 测试覆盖 / i18n 收尾），实证发现已立为 8 个新 issue：
+
+| Issue | 发现（均为代码级实证） | 备注 |
+| --- | --- | --- |
+| [#374](https://github.com/InvolutionHell/involutionhell/issues/374) | 全站零安全响应头（无 CSP/HSTS/XFO/Referrer-Policy） | CSP 必须先 Report-Only 观察 |
+| [#375](https://github.com/InvolutionHell/involutionhell/issues/375) | 文档页无 prev/next、无最后更新时间、无阅读时长 | 全部 build 时产出，零运行时成本 |
+| [#376](https://github.com/InvolutionHell/involutionhell/issues/376) | 无 RSS/Atom | 仿 search.json 静态 route 模式 |
+| [#377](https://github.com/InvolutionHell/involutionhell/issues/377) | 300+ 文档共用一张静态 OG 图 | 必须 SSG 预生成 + CJK 字体子集 |
+| [#378](https://github.com/InvolutionHell/involutionhell/issues/378) | 全仓 0 个 loading.tsx，动态页慢时整页白屏 | feed/rank/u 三处骨架 |
+| [#379](https://github.com/InvolutionHell/involutionhell/issues/379) | build 关键脚本（contributors/slug-map/escape-angles）零测试 | 先抽纯函数再测 |
+| [#380](https://github.com/InvolutionHell/involutionhell/issues/380) | Giscus 硬编码 zh-CN；未翻译页误宣告 hreflang；fallback 无提示 | 与翻译流水线 Phase 3 呼应 |
+| [#381](https://github.com/InvolutionHell/involutionhell/issues/381) | 无相关文章推荐 | 依赖 RAG v2 P1 的 embedding，勿单独建索引 |
+
+扫描到但**未立 issue** 的小项（顺手修即可，不值得开票）：
+`app/`/`lib/` 里 7 处 `console.log` 残留（清理或改 console.error）；
+`lib/source.ts` 过时注释（已列入翻译流水线 Phase 0）。
+
+未验证、不立 issue 的方向：a11y 深度审计（键盘导航/对比度/skip-link）
+需要真实浏览器跑 axe 才有实证，留给下次带浏览器环境的会话。
