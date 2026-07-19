@@ -7,15 +7,17 @@
 
 ## 模式与环境变量
 
-| 变量                | 默认              | 含义                                                                                                 |
-| ------------------- | ----------------- | ---------------------------------------------------------------------------------------------------- |
-| （无）              | DRY_RUN           | 默认即 dry run：只打印会发生什么（文件数、段数、TM 命中/未命中、冲突），不写任何文件，不调用任何 API |
-| `APPLY=1`           | —                 | 真正执行：写 `.en` 文件、更新 TM、重新生成冲突报告。需要 `ANTHROPIC_API_KEY`，除非 `PROVIDER=mock`   |
-| `PROVIDER`          | `anthropic`       | `anthropic` 走 Messages API；`mock` 用确定性伪翻译（测试/演练用，无需 key）                          |
-| `ANTHROPIC_API_KEY` | —                 | `APPLY=1` 且 `PROVIDER=anthropic` 时必需                                                             |
-| `TRANSLATE_MODEL`   | `claude-opus-4-8` | 翻译模型 id，写入目标 frontmatter 的 `translatorAgent` 和 TM 条目                                    |
-| `ONLY=子串`         | —                 | 只处理源路径包含该子串的文件，如 `ONLY=career/events`                                                |
-| `ADOPT_CONFLICTS=1` | —                 | 冲突段不再保留待办，而是把当前 `.en` 文本采纳进 TM（见下文"解决冲突"）                               |
+| 变量                    | 默认              | 含义                                                                                                                                                 |
+| ----------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| （无）                  | DRY_RUN           | 默认即 dry run：只打印会发生什么（文件数、段数、TM 命中/未命中、冲突），不写任何文件，不调用任何 API                                                 |
+| `APPLY=1`               | —                 | 真正执行：写 `.en` 文件、更新 TM、重新生成冲突报告。需要 `ANTHROPIC_API_KEY`，除非 `PROVIDER=mock`                                                   |
+| `PROVIDER`              | `anthropic`       | `anthropic` 走 Messages API；`mock` 用确定性伪翻译（测试/演练用，无需 key）                                                                          |
+| `ANTHROPIC_API_KEY`     | —                 | `APPLY=1` 且 `PROVIDER=anthropic` 时必需                                                                                                             |
+| `TRANSLATE_MODEL`       | `claude-opus-4-8` | 翻译模型 id，写入目标 frontmatter 的 `translatorAgent` 和 TM 条目                                                                                    |
+| `ONLY=子串`             | —                 | 只处理源路径包含该子串的文件，如 `ONLY=career/events`                                                                                                |
+| `ADOPT_CONFLICTS=1`     | —                 | 冲突段不再保留待办，而是把当前 `.en` 文本采纳进 TM（见下文"解决冲突"）                                                                               |
+| `ADOPT_ONLY=1`          | —                 | 只做 TM 收编：把已有 `.en` 译文按段写进 TM 并重新生成冲突报告，不调用任何 provider、不写 `.en` 文件，待译段保持 pending。与 `APPLY=1` 互斥，无需 key |
+| `TRANSLATE_MAX_UNITS=N` | ∞                 | `APPLY=1` 时的调用预算：待译段超出预算的文件整篇推迟到下次运行，摘要里报告 deferred 数量                                                             |
 
 常用命令：
 
@@ -24,9 +26,14 @@ pnpm translate:docs                        # dry run，看计划
 APPLY=1 pnpm translate:docs                # 全量执行（需 ANTHROPIC_API_KEY）
 APPLY=1 ONLY=projects pnpm translate:docs  # 只跑 projects 目录
 APPLY=1 PROVIDER=mock pnpm translate:docs  # 无 key 演练完整写盘路径
+ADOPT_ONLY=1 pnpm translate:docs           # 无 key 收编存量译文进 TM
 ```
 
 源文件 frontmatter 写 `noTranslate: true` 可整篇跳过。
+
+`APPLY=1` 产生的 `.en` / TM 变更提交时，commit subject 必须带
+`[translation-sync]` 标记（自动化 workflow 已内置）——贡献者统计按这个标记
+排除流水线 commit，漏掉会把机器翻译误计成人工贡献。
 
 ## 翻译记忆：`generated/translation-memory.json`
 

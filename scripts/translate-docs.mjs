@@ -15,10 +15,14 @@ const TM_PATH = path.join(ROOT, "generated", "translation-memory.json");
 const CONFLICTS_PATH = path.join(ROOT, "generated", "translation-conflicts.md");
 
 const APPLY = process.env.APPLY === "1";
+const ADOPT_ONLY = process.env.ADOPT_ONLY === "1";
 const PROVIDER_NAME = process.env.PROVIDER ?? "anthropic";
 const MODEL = process.env.TRANSLATE_MODEL ?? "claude-opus-4-8";
 const ONLY = process.env.ONLY ?? "";
 const ADOPT_CONFLICTS = process.env.ADOPT_CONFLICTS === "1";
+const MAX_UNITS = process.env.TRANSLATE_MAX_UNITS
+  ? Number(process.env.TRANSLATE_MAX_UNITS)
+  : Infinity;
 
 function listSourceFiles() {
   const files = [];
@@ -87,6 +91,16 @@ function buildConflictsMarkdown(conflicts) {
 }
 
 async function main() {
+  if (ADOPT_ONLY && APPLY) {
+    console.error("set either ADOPT_ONLY=1 or APPLY=1, not both");
+    process.exit(1);
+  }
+  if (!Number.isInteger(MAX_UNITS) && MAX_UNITS !== Infinity) {
+    console.error(
+      `TRANSLATE_MAX_UNITS must be an integer, got: ${process.env.TRANSLATE_MAX_UNITS}`,
+    );
+    process.exit(1);
+  }
   let provider = null;
   if (APPLY) {
     if (PROVIDER_NAME === "mock") {
@@ -107,7 +121,10 @@ async function main() {
   }
 
   const tm = loadTm();
-  const mode = APPLY ? "apply" : "plan";
+  const mode = ADOPT_ONLY ? "adopt" : APPLY ? "apply" : "plan";
+  const writeOutputs = mode === "apply" || mode === "adopt";
+  let budgetLeft = MAX_UNITS;
+  const deferred = { files: 0, units: 0 };
   const totals = {
     filesScanned: 0,
     filesNoTranslate: 0,
@@ -140,6 +157,26 @@ async function main() {
       ? fs.readFileSync(targetFile, "utf8")
       : null;
 
+    if (mode === "apply" && Number.isFinite(budgetLeft)) {
+      const planned = await processDoc({
+        sourceRaw,
+        targetRaw,
+        docId,
+        sourcePath: relSource,
+        tm,
+        provider: null,
+        mode: "plan",
+        model: MODEL,
+        adoptConflicts: ADOPT_CONFLICTS,
+      });
+      if (planned.stats.translated > budgetLeft) {
+        deferred.files++;
+        deferred.units += planned.stats.translated;
+        continue;
+      }
+      budgetLeft -= planned.stats.translated;
+    }
+
     const result = await processDoc({
       sourceRaw,
       targetRaw,
@@ -169,7 +206,7 @@ async function main() {
       translatePlan.push({ relSource, count: result.stats.translated });
     }
 
-    if (APPLY && !result.stats.skipped) {
+    if (writeOutputs && !result.stats.skipped) {
       tm.entries[docId] = result.tmDoc;
       if (result.output !== null && result.output !== targetRaw) {
         fs.writeFileSync(targetFile, result.output, "utf8");
@@ -178,7 +215,7 @@ async function main() {
     }
   }
 
-  if (APPLY) {
+  if (writeOutputs) {
     fs.writeFileSync(TM_PATH, serializeTm(tm), "utf8");
     fs.writeFileSync(
       CONFLICTS_PATH,
@@ -188,7 +225,13 @@ async function main() {
   }
 
   console.log(
-    `mode: ${mode}${APPLY ? ` (provider: ${PROVIDER_NAME}, model: ${provider?.model})` : " (DRY_RUN — nothing written)"}`,
+    `mode: ${mode}${
+      mode === "apply"
+        ? ` (provider: ${PROVIDER_NAME}, model: ${provider?.model})`
+        : mode === "adopt"
+          ? " (TM adoption only — no provider, .en files untouched)"
+          : " (DRY_RUN — nothing written)"
+    }`,
   );
   console.log(`files scanned:        ${totals.filesScanned}`);
   console.log(`files noTranslate:    ${totals.filesNoTranslate}`);
@@ -199,11 +242,25 @@ async function main() {
   console.log(`needs translation:    ${totals.translated}`);
   console.log(`conflicts:            ${totals.conflicts}`);
   console.log(`docs needing manual alignment: ${totals.docsSkipped}`);
-  if (APPLY) {
+  if (mode === "apply") {
     console.log(`provider calls:       ${totals.providerCalls}`);
     console.log(`target files written: ${totals.filesWritten}`);
+    if (Number.isFinite(MAX_UNITS)) {
+      console.log(
+        `deferred by TRANSLATE_MAX_UNITS=${MAX_UNITS}: ${deferred.units} unit(s) in ${deferred.files} file(s) — rerun to continue`,
+      );
+    }
+    if (totals.filesWritten > 0) {
+      console.log(
+        '\ncommit hint: include "[translation-sync]" in the commit subject so pipeline commits stay excluded from contributor credit',
+      );
+    }
   } else if (translatePlan.length > 0) {
-    console.log("\nsegments that would call the provider:");
+    console.log(
+      mode === "adopt"
+        ? "\nsegments left pending (need a provider run):"
+        : "\nsegments that would call the provider:",
+    );
     for (const item of translatePlan.slice(0, 20)) {
       console.log(`  ${item.relSource}: ${item.count}`);
     }
@@ -211,7 +268,7 @@ async function main() {
       console.log(`  ... and ${translatePlan.length - 20} more files`);
     }
   }
-  if (!APPLY && allConflicts.length > 0) {
+  if (mode === "plan" && allConflicts.length > 0) {
     console.log("\nconflicts that would be recorded:");
     for (const conflict of allConflicts.slice(0, 20)) {
       console.log(

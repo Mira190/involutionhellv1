@@ -214,7 +214,7 @@ function decideUnit({ unit, docTm, docHasTm, machineHashes, adoptConflicts }) {
  *   sourcePath: string,
  *   tm: TranslationMemory,
  *   provider?: TranslateProvider | null,
- *   mode?: "plan" | "apply",
+ *   mode?: "plan" | "apply" | "adopt",
  *   model?: string,
  *   now?: () => string,
  *   adoptConflicts?: boolean,
@@ -329,7 +329,7 @@ export async function processDoc({
       };
     } else if (action === "translate") {
       stats.translated++;
-      if (mode === "plan") continue;
+      if (mode !== "apply") continue;
       try {
         const result = await translateUnit(unit.text, provider, {
           docId,
@@ -369,6 +369,9 @@ export async function processDoc({
 
   if (mode === "plan") {
     return { output: null, tmDoc: docTm, conflicts, stats };
+  }
+  if (mode === "adopt") {
+    return { output: null, tmDoc, conflicts, stats };
   }
 
   const body = source.segments

@@ -300,6 +300,73 @@ describe("processDoc — three-way protection", () => {
   });
 });
 
+describe("processDoc — adopt mode", () => {
+  it("adopts an existing .en file into the TM without provider or file output", async () => {
+    const { result: first } = await freshTranslate();
+    const result = await processDoc({
+      sourceRaw: SOURCE,
+      targetRaw: first.output,
+      docId: "doc-test-1",
+      sourcePath: "content/docs/test.mdx",
+      tm: emptyTm(),
+      mode: "adopt",
+      now: FIXED_NOW,
+    });
+    expect(result.output).toBeNull();
+    expect(result.stats.adopted).toBe(6);
+    expect(result.stats.translated).toBe(0);
+    expect(result.stats.providerCalls).toBe(0);
+    expect(Object.keys(result.tmDoc)).toHaveLength(6);
+    for (const entry of Object.values(result.tmDoc)) {
+      expect(entry.model).toBe("adopted");
+    }
+  });
+
+  it("leaves provider-needed units pending without a provider", async () => {
+    const result = await processDoc({
+      sourceRaw: SOURCE,
+      targetRaw: null,
+      docId: "doc-test-1",
+      sourcePath: "content/docs/test.mdx",
+      tm: emptyTm(),
+      mode: "adopt",
+      now: FIXED_NOW,
+    });
+    expect(result.output).toBeNull();
+    expect(result.stats.translated).toBe(6);
+    expect(result.stats.providerCalls).toBe(0);
+    expect(Object.keys(result.tmDoc)).toHaveLength(0);
+  });
+
+  it("is idempotent: a second adopt run reuses every unit and keeps entries byte-identical", async () => {
+    const { result: first } = await freshTranslate();
+    const one = await processDoc({
+      sourceRaw: SOURCE,
+      targetRaw: first.output,
+      docId: "doc-test-1",
+      sourcePath: "content/docs/test.mdx",
+      tm: emptyTm(),
+      mode: "adopt",
+      now: FIXED_NOW,
+    });
+    const tm = { version: 1, entries: { "doc-test-1": one.tmDoc } };
+    const two = await processDoc({
+      sourceRaw: SOURCE,
+      targetRaw: first.output,
+      docId: "doc-test-1",
+      sourcePath: "content/docs/test.mdx",
+      tm,
+      mode: "adopt",
+      now: () => "2099-01-01T00:00:00.000Z",
+    });
+    expect(two.stats.reused).toBe(6);
+    expect(two.stats.adopted).toBe(0);
+    expect(
+      serializeTm({ version: 1, entries: { "doc-test-1": two.tmDoc } }),
+    ).toBe(serializeTm({ version: 1, entries: { "doc-test-1": one.tmDoc } }));
+  });
+});
+
 describe("processDoc — placeholder mismatch", () => {
   it("keeps the source segment untranslated and records a conflict after a failed retry", async () => {
     const provider = createMockProvider({ dropPlaceholders: Infinity });
