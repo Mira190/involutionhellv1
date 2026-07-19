@@ -29,6 +29,23 @@ const withMDX = createMDX({
 });
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
+// CSP 先 Report-Only 观察（浏览器 console / Sentry 可见违规），确认无误报后
+// 再切强制 Content-Security-Policy。新增第三方 script / iframe / fetch / 图片
+// 域名时必须同步补进对应 directive，否则切强制后功能会被静默拦截。
+// script-src 的 'unsafe-inline' 是 app/layout.tsx 内联 theme 防闪屏脚本 +
+// JSON-LD 结构化数据所必需。
+const cspReportOnly = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://umami.involutionhell.com https://va.vercel-scripts.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https://*.githubusercontent.com https://*.github.io https://*.r2.dev https://cdn.nlark.com https://*.amazonaws.com https://*.coly.cc https://cdn.discordapp.com https://media.discordapp.net https://placehold.co https://www.google-analytics.com https://www.googletagmanager.com",
+  "connect-src 'self' https://*.google-analytics.com https://www.googletagmanager.com https://umami.involutionhell.com https://*.sentry.io https://api.zotero.org https://va.vercel-scripts.com",
+  "frame-src https://giscus.app https://www.youtube.com https://www.youtube-nocookie.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+].join("; ");
+
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
@@ -351,6 +368,27 @@ const config = {
       // 链接（Hero / Footer 站内链接 + 外链）强制钉到 zh，英文用户再也协商不到
       // /en（且被浏览器/Google 缓存）。无前缀路径交给 next-intl 按 Accept-Language
       // / NEXT_LOCALE 协商（307，单跳到 /zh 或 /en）才是对的。
+    ];
+  },
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=()",
+          },
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=31536000; includeSubDomains",
+          },
+          { key: "Content-Security-Policy-Report-Only", value: cspReportOnly },
+        ],
+      },
     ];
   },
   async rewrites() {
