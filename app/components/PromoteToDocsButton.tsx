@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DocsDestinationForm } from "@/app/components/DocsDestinationForm";
+import { useClassifySuggestion } from "@/app/components/useClassifySuggestion";
 import { buildDocsNewUrl } from "@/lib/github";
 import { buildFrontmatter } from "@/lib/frontmatter";
 
@@ -44,6 +45,7 @@ export function PromoteToDocsButton({
     initialPromoted ? "promoted" : "idle",
   );
   const [destinationPath, setDestinationPath] = useState("");
+  const { suggestion, requestSuggestion } = useClassifySuggestion();
 
   if (state === "promoted") {
     return (
@@ -66,7 +68,10 @@ export function PromoteToDocsButton({
   if (state === "selecting") {
     return (
       <div className="flex flex-col gap-2">
-        <DocsDestinationForm onChange={setDestinationPath} />
+        <DocsDestinationForm
+          onChange={setDestinationPath}
+          suggestion={suggestion}
+        />
         <div className="flex gap-2">
           <button
             onClick={() => setState("idle")}
@@ -139,7 +144,13 @@ export function PromoteToDocsButton({
       : "font-mono text-[10px] hover:text-[#CC0000] transition-colors";
 
   return (
-    <button onClick={() => setState("selecting")} className={idleClass}>
+    <button
+      onClick={() => {
+        requestSuggestion(title, contentMd);
+        setState("selecting");
+      }}
+      className={idleClass}
+    >
       收录进知识库 →
     </button>
   );

@@ -11,17 +11,23 @@ import {
   CREATE_SUBDIR_SUFFIX,
   toTreeSelectData,
 } from "@/app/components/contribute/tree-utils";
+import type { ClassifySuggestion } from "@/app/components/useClassifySuggestion";
 
 interface DocsDestinationFormProps {
   onChange?: (path: string) => void;
+  suggestion?: ClassifySuggestion | null;
 }
 
-export function DocsDestinationForm({ onChange }: DocsDestinationFormProps) {
+export function DocsDestinationForm({
+  onChange,
+  suggestion,
+}: DocsDestinationFormProps) {
   const [tree, setTree] = useState<DirNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedKey, setSelectedKey] = useState("");
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
   const [newSub, setNewSub] = useState("");
+  const [userPicked, setUserPicked] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -56,6 +62,19 @@ export function DocsDestinationForm({ onChange }: DocsDestinationFormProps) {
       mounted = false;
     };
   }, []);
+
+  const suggestionApplied =
+    !userPicked && !!suggestion && selectedKey === suggestion.slug;
+
+  // AI 建议只在用户没有手动选择时预填；一旦用户自己选过，建议永远不再覆盖
+  useEffect(() => {
+    if (!suggestion || userPicked) return;
+    if (!tree.some((node) => node.path === suggestion.slug)) return;
+    setSelectedKey((prev) => (prev ? prev : suggestion.slug));
+    setExpandedKeys((prev) =>
+      prev.includes(suggestion.slug) ? prev : [...prev, suggestion.slug],
+    );
+  }, [suggestion, userPicked, tree]);
 
   const options = useMemo(() => toTreeSelectData(tree), [tree]);
 
@@ -94,7 +113,10 @@ export function DocsDestinationForm({ onChange }: DocsDestinationFormProps) {
           treeData={options as DataNode[]}
           loading={loading}
           value={selectedKey || undefined}
-          onChange={(val) => setSelectedKey((val as string) ?? "")}
+          onChange={(val) => {
+            setUserPicked(true);
+            setSelectedKey((val as string) ?? "");
+          }}
           showSearch
           treeNodeFilterProp="label"
           filterTreeNode={(input, node) =>
@@ -114,6 +136,11 @@ export function DocsDestinationForm({ onChange }: DocsDestinationFormProps) {
             trigger?.parentElement ?? document.body
           }
         />
+        {suggestionApplied && suggestion?.reason ? (
+          <p className="text-xs text-muted-foreground truncate">
+            AI 建议：{suggestion.reason}
+          </p>
+        ) : null}
       </div>
 
       {needsSubdirName && (
