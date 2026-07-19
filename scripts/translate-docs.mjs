@@ -140,6 +140,7 @@ async function main() {
   };
   const allConflicts = [];
   const translatePlan = [];
+  const seenDocIds = new Set();
 
   for (const sourceFile of listSourceFiles()) {
     const relSource = path.relative(ROOT, sourceFile);
@@ -151,7 +152,11 @@ async function main() {
       continue;
     }
     totals.filesScanned++;
-    const docId = data.docId ?? relSource;
+    // 同一轮里重复的 docId（内容重复文件）按路径另开 TM 桶，否则后处理的
+    // 文件会覆盖先处理文件的条目并把对方的译文误报成冲突
+    const preferredDocId = data.docId ?? relSource;
+    const docId = seenDocIds.has(preferredDocId) ? relSource : preferredDocId;
+    seenDocIds.add(preferredDocId);
     const targetFile = targetPathFor(sourceFile);
     const targetRaw = fs.existsSync(targetFile)
       ? fs.readFileSync(targetFile, "utf8")
