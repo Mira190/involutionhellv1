@@ -1,11 +1,11 @@
-import { source } from "@/lib/source";
+import { source, hasLanguageVersion } from "@/lib/source";
 import { safeJsonLdString } from "@/lib/json-ld";
 import { SITE_URL } from "@/lib/site-url";
 import { ensureSeoDescription } from "@/lib/seo-description";
 import { DocsPage, DocsBody } from "fumadocs-ui/page";
 import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
-import { setRequestLocale } from "next-intl/server";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 import { hasLocale } from "next-intl";
 import { getMDXComponents } from "@/mdx-components";
 import { GiscusComments } from "@/app/components/GiscusComments";
@@ -110,6 +110,12 @@ export default async function DocPage({ params }: Param) {
     notFound();
   }
 
+  const isFallbackContent =
+    locale !== routing.defaultLocale && !hasLanguageVersion(slug, locale);
+  const fallbackNotice = isFallbackContent
+    ? (await getTranslations("docs"))("fallbackNotice")
+    : null;
+
   // 统一通过工具函数生成 Edit 链接，内部已处理中文目录编码
   const editUrl = buildDocsEditUrl(page.path);
   const data = page.data as PageData;
@@ -186,6 +192,14 @@ export default async function DocPage({ params }: Param) {
       />
       <DocsPage toc={page.data.toc}>
         <DocsBody>
+          {fallbackNotice && (
+            <div
+              role="note"
+              className="mb-6 rounded-md border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-200"
+            >
+              {fallbackNotice}
+            </div>
+          )}
           <div className="mb-6 flex flex-col gap-3 border-b border-border pb-6 md:mb-8 md:flex-row md:items-start md:justify-between">
             <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">
               {page.data.title}
@@ -257,15 +271,20 @@ export async function generateMetadata({ params }: Param): Promise<Metadata> {
     : `/${locale}/docs`;
 
   // hreflang：告诉 Google 同一文档的另一语言 URL 在哪。
+  // 只宣告真实存在的语言版本——fallback 顶替的 en 页面内容还是中文，
+  // 宣告成 en-US 会误导搜索引擎。
   const langs: Record<string, string> = {};
   for (const l of routing.locales) {
+    if (!hasLanguageVersion(slug, l)) continue;
     const url = slugPath ? `/${l}/docs/${slugPath}` : `/${l}/docs`;
     langs[l === "en" ? "en-US" : "zh-CN"] = url;
   }
-  langs["x-default"] = `/${routing.defaultLocale}/docs/${slugPath}`.replace(
-    /\/$/,
-    "",
-  );
+  if (hasLanguageVersion(slug, routing.defaultLocale)) {
+    langs["x-default"] = `/${routing.defaultLocale}/docs/${slugPath}`.replace(
+      /\/$/,
+      "",
+    );
+  }
 
   // SEO description 兜底：page.data.description 可能为 undefined/空/极短
   // （96 个 leetcode 题解完全没 description，67 个空，35 个 < 20 字符）。
