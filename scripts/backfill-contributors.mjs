@@ -58,7 +58,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import "dotenv/config";
 import fg from "fast-glob";
-import matter from "gray-matter";
+import { parseDocFrontmatter } from "../lib/doc-frontmatter.ts";
 // Prisma7更改到了client.ts
 import * as PrismaModule from "../generated/prisma/client.ts";
 const PrismaClient =
@@ -163,23 +163,6 @@ async function listDocFiles() {
       absolute: path.join(docsDirAbs, relative),
     }))
     .sort((a, b) => a.relative.localeCompare(b.relative));
-}
-
-// 解析 frontmatter，取 docId / title / isTranslation
-function parseDocFrontmatter(content) {
-  const parsed = matter(content);
-  const data = parsed.data || {};
-  const docId = typeof data.docId === "string" ? data.docId.trim() : "";
-  const title = typeof data.title === "string" ? data.title.trim() : "";
-  // 有 translatedFrom 字段即为翻译版，不计入贡献者统计
-  const isTranslation =
-    typeof data.translatedFrom === "string" && data.translatedFrom.length > 0;
-  return {
-    docId: docId || null,
-    title: title || null,
-    isTranslation,
-    frontmatter: data,
-  };
 }
 
 // 拉取某个“路径”的 commit（分页+rate limit + 错误处理）

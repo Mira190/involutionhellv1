@@ -33,6 +33,18 @@ export function convertSlugToPinyin(text: string): string {
 export const LEETCODE_DIR_SLUG = "career/interview-prep/leetcode";
 
 /**
+ * 从文件名去掉 locale / 扩展名后缀，还原 Fumadocs 会当 slug 的 stem。
+ *   2309兼具大小写的最好英文字母_translated.md          → 2309兼具大小写的最好英文字母_translated
+ *   2241-design-an-atm-machine.zh.md                 → 2241-design-an-atm-machine
+ *   [146]LRU 缓存_translated.md                       → [146]LRU 缓存_translated
+ */
+export function stripLeetcodeFileSuffix(filename: string): string {
+  let stem = filename.replace(/\.(md|mdx)$/i, "");
+  stem = stem.replace(/\.(en|zh)$/i, "");
+  return stem;
+}
+
+/**
  * 从 leetcode 目录的文件名列表构建「题号 → 英文 ASCII slug」映射。
  *
  * 英文命名文件（`1234-replace-....en.md`）的 ASCII slug 一定能被 fumadocs 解析、
