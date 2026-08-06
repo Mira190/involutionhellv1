@@ -487,6 +487,14 @@
     "copy": "Copy link",
     "copied": "Copied"
   },
+  "docMeta": {
+    "readingTime": "{minutes} min read",
+    "lastUpdated": "Last updated {date}"
+  },
+  "docNav": {
+    "previous": "Previous",
+    "next": "Next"
+  },
   "editorMetadata": {
     "heading": "Article Info",
     "title": {

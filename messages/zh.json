@@ -487,6 +487,14 @@
     "copy": "复制链接",
     "copied": "已复制"
   },
+  "docMeta": {
+    "readingTime": "约 {minutes} 分钟",
+    "lastUpdated": "最后更新 {date}"
+  },
+  "docNav": {
+    "previous": "上一篇",
+    "next": "下一篇"
+  },
   "editorMetadata": {
     "heading": "文章信息",
     "title": {

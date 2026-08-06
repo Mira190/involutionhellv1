@@ -1,7 +1,11 @@
+import { readFileSync } from "node:fs";
 import { source } from "@/lib/source";
 import { safeJsonLdString } from "@/lib/json-ld";
 import { SITE_URL } from "@/lib/site-url";
 import { ensureSeoDescription } from "@/lib/seo-description";
+import { estimateReadingMinutes } from "@/lib/reading-time";
+import docDates from "@/generated/doc-dates.json";
+import { findNeighbour } from "fumadocs-core/server";
 import { DocsPage, DocsBody } from "fumadocs-ui/page";
 import {
   PageTOC,
@@ -12,6 +16,7 @@ import {
 } from "fumadocs-ui/layouts/docs/page";
 import { TOCScrollArea } from "fumadocs-ui/components/layout/toc";
 import { NumberedTocItems } from "@/app/components/NumberedTocItems";
+import { Clock, CalendarDays } from "lucide-react";
 import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
@@ -29,6 +34,7 @@ import { DocsAssistant } from "@/app/components/DocsAssistant";
 import { LicenseNotice } from "@/app/components/LicenseNotice";
 import { PageFeedback } from "@/app/components/PageFeedback";
 import { DocHistoryPanel } from "@/app/components/DocHistoryPanel";
+import { DocsFooterNav } from "@/app/components/DocsFooterNav";
 import { DocShareButton } from "@/app/components/DocShareButton";
 import { routing } from "@/i18n/routing";
 import { type PageData } from "@/app/types/doc";
@@ -159,6 +165,22 @@ export default async function DocPage({ params }: Param) {
     getDocContributorsByDocId(docIdFromPage);
   const Mdx = page.data.body;
 
+  // 读盘必须保持 request 无关（不碰 cookies/headers/动态 API），SSG 预渲染时在 build 阶段执行
+  const readingMinutes = estimateReadingMinutes(
+    readFileSync(page.absolutePath, "utf8"),
+  );
+  const lastUpdated = (docDates as Record<string, string>)[
+    `content/docs/${page.path}`
+  ];
+  const { previous, next } = findNeighbour(
+    source.getPageTree(locale),
+    page.url,
+  );
+  const [tMeta, tNav] = await Promise.all([
+    getTranslations({ locale, namespace: "docMeta" }),
+    getTranslations({ locale, namespace: "docNav" }),
+  ]);
+
   // SEO 结构化数据：URL 含 locale 前缀
   const slugPath = (slug ?? []).join("/");
   const docUrl = slugPath
@@ -250,9 +272,23 @@ export default async function DocPage({ params }: Param) {
       >
         <DocsBody>
           <div className="mb-6 flex flex-col gap-3 border-b border-border pb-6 md:mb-8 md:flex-row md:items-start md:justify-between">
-            <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">
-              {page.data.title}
-            </h1>
+            <div className="flex flex-col gap-2">
+              <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">
+                {page.data.title}
+              </h1>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" />
+                  {tMeta("readingTime", { minutes: readingMinutes })}
+                </span>
+                {lastUpdated ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    {tMeta("lastUpdated", { date: lastUpdated })}
+                  </span>
+                ) : null}
+              </div>
+            </div>
             <div className="flex items-center gap-2">
               <DocShareButton />
               <EditOnGithub href={editUrl} />
@@ -278,6 +314,12 @@ export default async function DocPage({ params }: Param) {
               </ul>
             </section>
           )}
+          <DocsFooterNav
+            previous={previous}
+            next={next}
+            previousLabel={tNav("previous")}
+            nextLabel={tNav("next")}
+          />
           <section className="mt-16">
             <GiscusComments docId={docIdFromPage ?? null} />
           </section>
