@@ -510,5 +510,8 @@
   },
   "shareLink": {
     "button": "Share a Link"
+  },
+  "relatedDocs": {
+    "title": "Related articles"
   }
 }
