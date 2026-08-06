@@ -20,6 +20,7 @@ import {
   LEETCODE_DIR_SLUG,
   buildLeetcodeAsciiSlugByNumber,
   leetcodeCanonicalUrl,
+  stripLeetcodeFileSuffix,
 } from "../lib/leetcode-slug.ts";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -30,18 +31,6 @@ const LEETCODE_DIR = path.join(
   "content/docs/career/interview-prep/leetcode",
 );
 const OUTPUT_FILE = path.join(PROJECT_ROOT, "generated/leetcode-slug-map.json");
-
-/**
- * 从文件名去掉 locale / 扩展名后缀，还原 Fumadocs 会当 slug 的 stem。
- *   2309兼具大小写的最好英文字母_translated.md          → 2309兼具大小写的最好英文字母_translated
- *   2241-design-an-atm-machine.zh.md                 → 2241-design-an-atm-machine
- *   [146]LRU 缓存_translated.md                       → [146]LRU 缓存_translated
- */
-function stripSuffix(filename: string): string {
-  let stem = filename.replace(/\.(md|mdx)$/i, "");
-  stem = stem.replace(/\.(en|zh)$/i, "");
-  return stem;
-}
 
 function main() {
   if (!fs.existsSync(LEETCODE_DIR)) {
@@ -59,7 +48,7 @@ function main() {
   // byName：当前中文命名文件的精确映射（覆盖无英文兄弟、只能走 zh 拼音页的情况）。
   const byName: Record<string, string> = {};
   for (const file of files) {
-    const stem = stripSuffix(file);
+    const stem = stripLeetcodeFileSuffix(file);
     // 只给中文命名文件建映射：英文命名文件本身就是 canonical 目标，不必重定向自己；
     // 纯 ASCII 的 _translated（如 219_translated）真实 slug == stem，旧 URL 直达即可。
     if (!/[^ -~]/.test(stem)) continue;
