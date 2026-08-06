@@ -7,6 +7,9 @@ tags:
   - LLMs
   - arXiv
 docId: l6eepr5ctjgrhdgupy3twr1t
+lang: en
+translatedFrom: zh
+sourcePath: "content/docs/learn/ai/papers/prompt-repetition-improves-non-reasoning-llms.md"
 ---
 
 &lt;https://arxiv.org/pdf/2512.14982&gt;

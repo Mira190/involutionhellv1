@@ -11,6 +11,7 @@ lang: en
 translatedFrom: zh
 translatedAt: 2026-04-15T12:00:00Z
 translatorAgent: claude-sonnet-4-6
+sourcePath: "content/docs/learn/ai/Introduction-of-Multi-agents-system/introduction_of_multi-agents_system.md"
 ---
 
 # Introduction of Multi-Agent Systems (For Any Task You Want)

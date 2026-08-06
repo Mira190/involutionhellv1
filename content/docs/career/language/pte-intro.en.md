@@ -9,6 +9,7 @@ lang: en
 translatedFrom: zh
 translatedAt: 2026-05-11T00:00:00Z
 translatorAgent: claude-sonnet-4-6
+sourcePath: "content/docs/career/language/pte-intro.md"
 ---
 
 Many students are unfamiliar with the PTE exam due to a lack of information. In reality, for those looking to obtain a language score or pursue immigration, PTE (Pearson Test of English) is often easier to score highly on than IELTS or TOEFL. Countless test-takers have contributed memorized questions and summaries of high-frequency topics, so with a bit of luck it can feel like an open-book exam. However, unlike IELTS and TOEFL, PTE Academic has a large variety of task types and requires strong test-taking strategies. Students who score well on IELTS may still struggle with PTE if they underestimate the importance of practice and technique. Here is a simple introduction to the task types and cross-scoring system — more PTE tips will follow in future updates. Feel free to leave a comment if there is something specific you would like to see covered.

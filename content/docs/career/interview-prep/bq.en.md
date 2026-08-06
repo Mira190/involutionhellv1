@@ -9,6 +9,7 @@ lang: en
 translatedFrom: zh
 translatedAt: 2026-04-15T00:00:00Z
 translatorAgent: claude-opus-4-6
+sourcePath: "content/docs/career/interview-prep/bq.md"
 ---
 
 # Ten Universal Angles for Behavioral Interviews

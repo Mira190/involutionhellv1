@@ -12,6 +12,7 @@ lang: en
 translatedFrom: zh
 translatedAt: 2026-04-15T12:00:00Z
 translatorAgent: claude-sonnet-4-6
+sourcePath: "content/docs/career/interview-prep/leetcode/1545-find-kth-bit-in-nth-binary-string.zh.md"
 ---
 
 # Problem

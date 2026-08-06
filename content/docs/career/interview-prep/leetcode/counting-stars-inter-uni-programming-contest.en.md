@@ -12,6 +12,7 @@ lang: en
 translatedFrom: zh
 translatedAt: 2026-05-11T00:00:00Z
 translatorAgent: claude-sonnet-4-6
+sourcePath: "content/docs/career/interview-prep/leetcode/counting-stars-inter-uni-programming-contest.zh.md"
 ---
 
 # Problem Description

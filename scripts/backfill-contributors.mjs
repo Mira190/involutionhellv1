@@ -66,6 +66,7 @@ const PrismaClient =
 import pg from "pg";
 const { Pool } = pg;
 import { PrismaPg } from "@prisma/adapter-pg";
+import { shouldCountTranslationCommit } from "../lib/contribution-credit.ts";
 
 // Node >=18 在 Actions 下自带 fetch；若需兼容性可加 undici，但默认不必。
 // import fetch from "node-fetch";
@@ -210,11 +211,41 @@ async function fetchCommitsForFile(repoRelativePath) {
   return commits;
 }
 
-// 多路径抓取并按 sha 去重
-async function fetchCommitsForPaths(allPaths) {
+function commitTimestamp(c) {
+  const iso = c?.commit?.author?.date || c?.commit?.committer?.date;
+  const t = iso ? Date.parse(iso) : NaN;
+  return Number.isFinite(t) ? t : Infinity;
+}
+
+// commits API 按时间倒序返回；该路径最早的 commit 视作创建 commit
+function creationShaOf(commits) {
+  let earliest = null;
+  for (const c of commits) {
+    if (!earliest || commitTimestamp(c) <= commitTimestamp(earliest)) {
+      earliest = c;
+    }
+  }
+  return earliest?.sha ?? null;
+}
+
+function filterTranslationCommits(commits) {
+  const creationSha = creationShaOf(commits);
+  return commits.filter((c) =>
+    shouldCountTranslationCommit({
+      isCreation: c?.sha === creationSha,
+      authorLogin: c?.author?.login ?? null,
+      authorName: c?.commit?.author?.name ?? null,
+      subject: String(c?.commit?.message ?? "").split("\n")[0],
+    }),
+  );
+}
+
+// 多路径抓取并按 sha 去重；翻译文件路径先按贡献计数规则过滤
+async function fetchCommitsForPaths(allPaths, translationPaths = new Set()) {
   const bySha = new Map(); // sha -> commitObject
   for (const p of allPaths) {
-    const commits = await fetchCommitsForFile(p);
+    let commits = await fetchCommitsForFile(p);
+    if (translationPaths.has(p)) commits = filterTranslationCommits(commits);
     for (const c of commits) {
       const sha = c?.sha;
       if (sha && !bySha.has(sha)) bySha.set(sha, c);
@@ -460,6 +491,7 @@ async function main() {
   // 扫描当前文件：收集 docId -> 当前路径集合、以及 docId->title
   const currentDocIdPaths = new Map(); // docId -> Set(paths)
   const titleByDocId = new Map();
+  const translationPaths = new Set(); // 翻译文件路径，commit 需过滤后计数
 
   for (const file of docFiles) {
     const repoRelative = path
@@ -472,10 +504,8 @@ async function main() {
       log(`  ⚠️ 跳过 ${repoRelative}：缺少 docId`);
       continue;
     }
-    // 翻译版（frontmatter 有 translatedFrom）不统计贡献者
     if (meta.isTranslation) {
-      log(`  ⏭  跳过翻译版：${repoRelative}`);
-      continue;
+      translationPaths.add(repoRelative);
     }
     const set = currentDocIdPaths.get(meta.docId) ?? new Set();
     set.add(repoRelative);
@@ -516,7 +546,10 @@ async function main() {
 
     let commits = [];
     try {
-      commits = await fetchCommitsForPaths(Array.from(unionPaths));
+      commits = await fetchCommitsForPaths(
+        Array.from(unionPaths),
+        translationPaths,
+      );
     } catch (err) {
       log(`  ✖ 拉取 commits 失败 (docId=${docId}): ${err.message}`);
       results.push({

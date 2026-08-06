@@ -14,6 +14,7 @@ lang: en
 translatedFrom: zh
 translatedAt: 2026-04-15T08:00:00Z
 translatorAgent: claude-sonnet-4-6
+sourcePath: "content/docs/career/events/coffee-chat.md"
 ---
 
 # Involution Hell × Teacher R | Australian Programmer Job Search & Career Planning Session Recap

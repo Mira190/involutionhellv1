@@ -11,6 +11,7 @@ lang: en
 translatedFrom: zh
 translatedAt: 2026-04-15T08:00:00Z
 translatorAgent: claude-sonnet-4-6
+sourcePath: "content/docs/learn/cs/cpp-backend/handwritten-pool-components/2-handwritten-mempool1.md"
 ---
 
 # Handwritten Fixed-Size Memory Pool

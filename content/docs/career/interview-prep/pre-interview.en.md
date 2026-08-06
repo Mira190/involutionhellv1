@@ -10,6 +10,7 @@ lang: en
 translatedFrom: zh
 translatedAt: 2026-04-15T08:00:00Z
 translatorAgent: claude-sonnet-4-6
+sourcePath: "content/docs/career/interview-prep/pre-interview.md"
 ---
 
 Before an interview, preparation goes beyond reviewing your resume and practising answers. The more important work is doing your **background research** — the kind that most candidates skip, but that you do thoroughly. Why? Because in a competitive interview, the interviewer can sense almost immediately whether you've put in the effort. Drop a few specific details that resonate with them during the conversation, and your impression score jumps instantly.

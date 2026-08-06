@@ -11,6 +11,7 @@ lang: en
 translatedFrom: zh
 translatedAt: 2026-04-15T08:00:00Z
 translatorAgent: claude-sonnet-4-6
+sourcePath: "content/docs/learn/cs/cpp-backend/easy-compile/1-cpp-libs.md"
 ---
 
 # C++ Libraries on Linux/Windows
