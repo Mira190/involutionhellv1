@@ -17,7 +17,7 @@
  */
 
 import type { MetadataRoute } from "next";
-import { source } from "@/lib/source";
+import { source, hasLanguageVersion } from "@/lib/source";
 import leaderboard from "@/generated/site-leaderboard.json";
 import { SITE_URL } from "@/lib/site-url";
 import { routing, type Locale } from "@/i18n/routing";
@@ -70,11 +70,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
     );
   }
 
-  // 2. 文档页面：每个 locale 拿一份，按 fumadocs i18n 接口取
+  // 2. 文档页面：每个 locale 拿一份，按 fumadocs i18n 接口取。
+  // fallbackLanguage='zh' 会让 getPages('en') 把未翻译文档也列出来（内容
+  // 是 zh 原文），这类 fallback 页不进 en sitemap，避免宣告不存在的翻译。
   for (const locale of routing.locales) {
     const pages = source.getPages(locale);
     for (const page of pages) {
       if (isDraftOrHidden(page)) continue;
+      if (!hasLanguageVersion(page.slugs, locale)) continue;
       const entry = buildDocsEntry(page, locale);
       entries.push(entry);
       if (entry.lastModified instanceof Date) {
@@ -118,6 +121,7 @@ interface BuildLocaleEntryArgs {
   >;
   priority: number;
   lastModified?: Date;
+  availableLocales?: readonly Locale[];
 }
 
 /**
@@ -130,10 +134,11 @@ function buildLocaleEntry({
   changeFrequency,
   priority,
   lastModified,
+  availableLocales = routing.locales,
 }: BuildLocaleEntryArgs): MetadataRoute.Sitemap[number] {
   const url = `${SITE_URL}/${currentLocale}${pathname}`;
   const languages: Record<string, string> = {};
-  for (const l of routing.locales) {
+  for (const l of availableLocales) {
     languages[l === "en" ? "en-US" : "zh-CN"] = `${SITE_URL}/${l}${pathname}`;
   }
   return {
@@ -163,5 +168,8 @@ function buildDocsEntry(
     changeFrequency: "monthly",
     priority: 0.6,
     lastModified: fmDate,
+    availableLocales: routing.locales.filter((l) =>
+      hasLanguageVersion(page.slugs, l),
+    ),
   });
 }

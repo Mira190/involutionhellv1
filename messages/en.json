@@ -521,5 +521,8 @@
   },
   "relatedDocs": {
     "title": "Related articles"
+  },
+  "docs": {
+    "fallbackNotice": "This article hasn't been translated yet — showing the Chinese original."
   }
 }

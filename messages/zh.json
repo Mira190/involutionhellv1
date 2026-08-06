@@ -521,5 +521,8 @@
   },
   "relatedDocs": {
     "title": "相关文章"
+  },
+  "docs": {
+    "fallbackNotice": "本文尚未翻译，当前显示中文原文。"
   }
 }

@@ -30,6 +30,26 @@ const i18n = defineI18n({
   fallbackLanguage: "zh",
 });
 
+/**
+ * 判断某语言版本是否真实存在（而非 fallback 顶替）。
+ *
+ * fallbackLanguage='zh' 会让 getPage(slug, 'en') 在 .en.mdx 缺失时返回 zh
+ * 原文，且返回的 page.locale 仍标为 'en'——locale 字段说的是"请求的语言"
+ * 而不是"文件的语言"。只有原始文件路径（.en 后缀有无）能区分真假翻译，
+ * 所以用 path 与 fallback 语言的 page 对比。
+ */
+export function hasLanguageVersion(
+  slug: string[] | undefined,
+  locale: string,
+): boolean {
+  const fallbackLanguage = i18n.fallbackLanguage ?? i18n.defaultLanguage;
+  const page = source.getPage(slug, locale);
+  if (page == null) return false;
+  if (locale === fallbackLanguage) return true;
+  const fallback = source.getPage(slug, fallbackLanguage);
+  return fallback == null || page.path !== fallback.path;
+}
+
 export const source = loader({
   baseUrl: "/docs",
   source: docs.toFumadocsSource(),

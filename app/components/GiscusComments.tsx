@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Giscus from "@giscus/react";
+import { useLocale } from "next-intl";
 import { useTheme } from "./ThemeProvider";
 
 interface GiscusCommentsProps {
@@ -15,6 +16,7 @@ const emptySubscribe = () => () => {};
 
 export function GiscusComments({ className, docId }: GiscusCommentsProps) {
   const { theme } = useTheme();
+  const locale = useLocale();
   const normalizedDocId = typeof docId === "string" ? docId.trim() : "";
   const useSpecificMapping = normalizedDocId.length > 0;
   // mounted 门槛：SSR 阶段 ThemeProvider 的 useState 初值是 defaultTheme("dark")，
@@ -68,7 +70,7 @@ export function GiscusComments({ className, docId }: GiscusCommentsProps) {
         emitMetadata="0"
         inputPosition="top"
         theme={resolvedTheme}
-        lang="zh-CN"
+        lang={locale === "en" ? "en" : "zh-CN"}
         loading="lazy"
       />
     </div>
