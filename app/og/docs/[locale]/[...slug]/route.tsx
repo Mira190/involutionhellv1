@@ -1,17 +1,29 @@
 import { ImageResponse } from "next/og";
 import { source } from "@/lib/source";
 import { fetchSubsetFont } from "@/lib/og-font";
+import { routing } from "@/i18n/routing";
 
-export const size = { width: 1200, height: 630 };
-export const contentType = "image/png";
-export const alt = "Involution Hell Docs";
+// 未知 slug 直接 404：OG 渲染含外部字体拉取，绝不能被爬虫扫描触发运行时执行
+export const dynamicParams = false;
+
+export function generateStaticParams() {
+  return source.generateParams("slug", "lang").map((p) => ({
+    locale: p.lang as string,
+    slug: p.slug as string[],
+  }));
+}
+
+const SIZE = { width: 1200, height: 630 };
 
 interface Param {
   params: Promise<{ locale: string; slug?: string[] }>;
 }
 
-export default async function OgImage({ params }: Param) {
+export async function GET(_req: Request, { params }: Param) {
   const { locale, slug } = await params;
+  if (!routing.locales.includes(locale as "zh" | "en")) {
+    return new Response(null, { status: 404 });
+  }
   const page = source.getPage(slug, locale);
   const title = page?.data.title ?? "Involution Hell";
   const section = (slug ?? []).slice(0, -1).join(" / ");
@@ -71,7 +83,7 @@ export default async function OgImage({ params }: Param) {
       </div>
     ),
     {
-      ...size,
+      ...SIZE,
       fonts: font
         ? [{ name: "Noto Sans SC", data: font, weight: 700 as const }]
         : undefined,

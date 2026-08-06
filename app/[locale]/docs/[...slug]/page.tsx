@@ -422,6 +422,10 @@ export async function generateMetadata({ params }: Param): Promise<Metadata> {
     locale,
   });
 
+  const ogImage = slugPath
+    ? `/og/docs/${locale}/${slugPath}`
+    : `/og/docs/${locale}`;
+
   return {
     title: page.data.title,
     description: safeDescription,
@@ -432,11 +436,13 @@ export async function generateMetadata({ params }: Param): Promise<Metadata> {
       description: safeDescription,
       url: canonical,
       locale: locale === "en" ? "en_US" : "zh_CN",
+      images: [{ url: ogImage, width: 1200, height: 630 }],
     },
     twitter: {
       card: "summary_large_image",
       title: page.data.title,
       description: safeDescription,
+      images: [ogImage],
     },
   };
 }
