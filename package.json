@@ -20,6 +20,7 @@
     "check:pnpm-version": "node scripts/check-pnpm-version.mjs",
     "check:lockfile": "node scripts/check-lockfile.mjs",
     "check:frontmatter": "node scripts/check-frontmatter-description.mjs",
+    "check:translations": "node scripts/check-translation-integrity.mjs",
     "check:frontmatter:all": "node scripts/check-frontmatter-description.mjs --all"
   },
   "dependencies": {
