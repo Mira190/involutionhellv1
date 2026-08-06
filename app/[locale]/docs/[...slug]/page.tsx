@@ -3,6 +3,15 @@ import { safeJsonLdString } from "@/lib/json-ld";
 import { SITE_URL } from "@/lib/site-url";
 import { ensureSeoDescription } from "@/lib/seo-description";
 import { DocsPage, DocsBody } from "fumadocs-ui/page";
+import {
+  PageTOC,
+  PageTOCTitle,
+  PageTOCPopover,
+  PageTOCPopoverTrigger,
+  PageTOCPopoverContent,
+} from "fumadocs-ui/layouts/docs/page";
+import { TOCScrollArea } from "fumadocs-ui/components/layout/toc";
+import { NumberedTocItems } from "@/app/components/NumberedTocItems";
 import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import { setRequestLocale } from "next-intl/server";
@@ -184,7 +193,31 @@ export default async function DocPage({ params }: Param) {
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: safeJsonLdString(breadcrumbJsonLd) }}
       />
-      <DocsPage toc={page.data.toc}>
+      <DocsPage
+        toc={page.data.toc}
+        tableOfContent={{
+          component: (
+            <PageTOC>
+              <PageTOCTitle />
+              <TOCScrollArea>
+                <NumberedTocItems />
+              </TOCScrollArea>
+            </PageTOC>
+          ),
+        }}
+        tableOfContentPopover={{
+          component: (
+            <PageTOCPopover>
+              <PageTOCPopoverTrigger />
+              <PageTOCPopoverContent>
+                <TOCScrollArea>
+                  <NumberedTocItems />
+                </TOCScrollArea>
+              </PageTOCPopoverContent>
+            </PageTOCPopover>
+          ),
+        }}
+      >
         <DocsBody>
           <div className="mb-6 flex flex-col gap-3 border-b border-border pb-6 md:mb-8 md:flex-row md:items-start md:justify-between">
             <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">
