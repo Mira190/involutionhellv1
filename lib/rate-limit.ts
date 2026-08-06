@@ -11,15 +11,11 @@
  *   const result = await limitChat(req);
  *   if (!result.success) return rateLimitResponse(result);
  */
-import { Ratelimit } from "@upstash/ratelimit";
+import { Ratelimit, type Duration } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
-// 单例 Redis/Ratelimit 实例，避免每次请求都重建连接
-let cachedChatLimiter: Ratelimit | null = null;
-let cachedChatImageLimiter: Ratelimit | null = null;
-let cachedDailyLimiter: Ratelimit | null = null;
 // Upstash env 缺失的 warn 只在模块生命周期内打一次，
-// 避免生产环境每请求刷爆 serverless 日志（Copilot CR #3）
+// 避免生产环境每请求刷爆 serverless 日志
 let hasWarnedMissingUpstash = false;
 
 /**
@@ -53,52 +49,10 @@ function getRedis(): Redis | null {
   return new Redis({ url, token });
 }
 
-/** 纯文本聊天：10 req / 60s / IP */
-function getChatLimiter(): Ratelimit | null {
-  if (cachedChatLimiter) return cachedChatLimiter;
-  const redis = getRedis();
-  if (!redis) return null;
-  cachedChatLimiter = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(10, "60 s"),
-    analytics: true,
-    prefix: "ratelimit:chat:text",
-  });
-  return cachedChatLimiter;
-}
-
-/** 带图聊天：5 req / 60s / IP（图片更贵，收严） */
-function getChatImageLimiter(): Ratelimit | null {
-  if (cachedChatImageLimiter) return cachedChatImageLimiter;
-  const redis = getRedis();
-  if (!redis) return null;
-  cachedChatImageLimiter = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(5, "60 s"),
-    analytics: true,
-    prefix: "ratelimit:chat:image",
-  });
-  return cachedChatImageLimiter;
-}
-
-/** 日限：100 req / 24h / IP，防长尾刷量 */
-function getDailyLimiter(): Ratelimit | null {
-  if (cachedDailyLimiter) return cachedDailyLimiter;
-  const redis = getRedis();
-  if (!redis) return null;
-  cachedDailyLimiter = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(100, "24 h"),
-    analytics: true,
-    prefix: "ratelimit:chat:daily",
-  });
-  return cachedDailyLimiter;
-}
-
 /**
  * 从 request headers 里提取客户端 IP。
  *
- * 防伪造（Copilot CR #2）：
+ * 防伪造：
  * - 优先读 `x-real-ip`：Vercel/多数 CDN 只写由自己验证过的真实客户端 IP，
  *   不会把客户端伪造的值透传进来，最可信。
  * - 没有 `x-real-ip` 时才降级到 `x-forwarded-for`；但不能取 XFF 的 **第一个**，
@@ -132,6 +86,91 @@ export interface RateLimitResult {
   skipped?: boolean;
 }
 
+function skippedResult(): RateLimitResult {
+  if (!hasWarnedMissingUpstash) {
+    hasWarnedMissingUpstash = true;
+    console.warn(
+      "[rate-limit] UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN 未配置，" +
+        "AI 接口暂无限流保护（本实例生命周期内不会再次提示）。" +
+        "生产环境请在 Vercel Env 中补齐。",
+    );
+  }
+  return {
+    success: true,
+    limit: Infinity,
+    remaining: Infinity,
+    reset: 0,
+    skipped: true,
+  };
+}
+
+export interface LimiterOptions {
+  prefix: string;
+  requests: number;
+  window: Duration;
+}
+
+/**
+ * per-IP 滑动窗口限流器工厂。Ratelimit 实例按 limiter 单例缓存，
+ * 避免每次请求都重建连接；Upstash 未配置时降级为放行 + warn 一次。
+ */
+export function createLimiter(options: LimiterOptions) {
+  let cached: Ratelimit | null = null;
+
+  function getInstance(): Ratelimit | null {
+    if (cached) return cached;
+    const redis = getRedis();
+    if (!redis) return null;
+    cached = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(options.requests, options.window),
+      analytics: true,
+      prefix: options.prefix,
+    });
+    return cached;
+  }
+
+  return async function limit(req: Request): Promise<RateLimitResult> {
+    const limiter = getInstance();
+    if (!limiter) return skippedResult();
+    const res = await limiter.limit(getClientIp(req));
+    return {
+      success: res.success,
+      limit: res.limit,
+      remaining: res.remaining,
+      reset: res.reset,
+    };
+  };
+}
+
+/** 纯文本聊天：10 req / 60s / IP */
+const limitChatText = createLimiter({
+  prefix: "ratelimit:chat:text",
+  requests: 10,
+  window: "60 s",
+});
+
+/** 带图聊天：5 req / 60s / IP（图片更贵，收严） */
+const limitChatImage = createLimiter({
+  prefix: "ratelimit:chat:image",
+  requests: 5,
+  window: "60 s",
+});
+
+/** 日限：100 req / 24h / IP，防长尾刷量 */
+const limitChatDaily = createLimiter({
+  prefix: "ratelimit:chat:daily",
+  requests: 100,
+  window: "24 h",
+});
+
+/** 投稿分类建议：10 req / 60s / IP */
+export const limitClassify = createLimiter({
+  prefix: "ratelimit:classify",
+  requests: 10,
+  window: "60 s",
+});
+
 /**
  * 对聊天请求做两层限流：per-minute + per-day，任一维度不过就算失败。
  * @param req  Next.js Request
@@ -141,60 +180,17 @@ export async function limitChat(
   req: Request,
   hasImage = false,
 ): Promise<RateLimitResult> {
-  const minuteLimiter = hasImage ? getChatImageLimiter() : getChatLimiter();
-  const dayLimiter = getDailyLimiter();
-
-  // Upstash 未配置：本地开发或生产漏配。不阻塞请求，只打一次 warn 提示运维。
-  // 不再按 NODE_ENV 区分（dev 也提示，免得开发期"没限流却不知道"），
-  // 用 module 级 flag 避免每请求刷爆日志（Copilot CR #3）。
-  if (!minuteLimiter || !dayLimiter) {
-    if (!hasWarnedMissingUpstash) {
-      hasWarnedMissingUpstash = true;
-      console.warn(
-        "[rate-limit] UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN 未配置，" +
-          "聊天接口暂无限流保护（本实例生命周期内不会再次提示）。" +
-          "生产环境请在 Vercel Env 中补齐。",
-      );
-    }
-    return {
-      success: true,
-      limit: Infinity,
-      remaining: Infinity,
-      reset: 0,
-      skipped: true,
-    };
-  }
-
-  const ip = getClientIp(req);
   const [minuteRes, dayRes] = await Promise.all([
-    minuteLimiter.limit(ip),
-    dayLimiter.limit(ip),
+    (hasImage ? limitChatImage : limitChatText)(req),
+    limitChatDaily(req),
   ]);
 
-  if (!minuteRes.success) {
-    return {
-      success: false,
-      limit: minuteRes.limit,
-      remaining: minuteRes.remaining,
-      reset: minuteRes.reset,
-    };
-  }
-  if (!dayRes.success) {
-    return {
-      success: false,
-      limit: dayRes.limit,
-      remaining: dayRes.remaining,
-      reset: dayRes.reset,
-    };
-  }
+  if (minuteRes.skipped || dayRes.skipped) return skippedResult();
+  if (!minuteRes.success) return minuteRes;
+  if (!dayRes.success) return dayRes;
+
   // 取剩余额度较紧的一档回给调用方
-  const tighter = minuteRes.remaining <= dayRes.remaining ? minuteRes : dayRes;
-  return {
-    success: true,
-    limit: tighter.limit,
-    remaining: tighter.remaining,
-    reset: tighter.reset,
-  };
+  return minuteRes.remaining <= dayRes.remaining ? minuteRes : dayRes;
 }
 
 /** 生成 429 响应，带标准 Retry-After 和 X-RateLimit-* 头 */
