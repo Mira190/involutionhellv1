@@ -23,21 +23,17 @@
 
 import fs from "fs";
 import path from "path";
+import {
+  IMAGE_FILE_EXTS,
+  extractImageRefs,
+  extractImageUrls,
+} from "./lib/image-refs.mjs";
 
 const ROOT = process.cwd();
 const DOCS_DIR = path.join(ROOT, "content", "docs");
 // 允许的绝对路径前缀（站点级 & 组件演示级别）
 const ALLOWED_ABSOLUTE_PREFIXES = ["/images/site/", "/images/components/"];
 
-// 图片文件扩展名
-const IMAGE_FILE_EXTS = new Set([
-  ".png",
-  ".jpg",
-  ".jpeg",
-  ".gif",
-  ".webp",
-  ".svg",
-]);
 const exts = new Set([".md", ".mdx"]);
 
 /** Recursively list files */
@@ -77,17 +73,12 @@ function isAllowedAbsolute(url) {
  * 构建全局引用表：统计所有文档对非站点级 `/images/...` 的引用次数
  */
 function buildRefs() {
-  const reMdx = /!\[[^\]]*\]\(([^)]+)\)/g;
-  const reHtml = /<img[^>]*src=["']([^"']+)["'][^>]*>/gi;
   /** @type {Map<string, Set<string>>} */
   const refs = new Map();
   for (const f of walk(DOCS_DIR)) {
     if (!exts.has(path.extname(f))) continue;
     const s = fs.readFileSync(f, "utf8");
-    const urls = new Set();
-    for (const m of s.matchAll(reMdx)) urls.add(m[1]);
-    for (const m of s.matchAll(reHtml)) urls.add(m[1]);
-    for (const url of urls) {
+    for (const url of extractImageUrls(s)) {
       const u = url.replace(/\\/g, "/");
       if (!u.startsWith("/")) continue;
       if (isAllowedAbsolute(u)) continue;
@@ -103,10 +94,6 @@ function checkFile(file, refs) {
   const baseDir = path.dirname(file);
   const baseName = path.basename(file, path.extname(file));
   const expectedRelPrefix = `./${baseName}.assets/`;
-  // Markdown 图片语法：![alt](src)
-  const re = /!\[[^\]]*\]\(([^)]+)\)/g;
-  // HTML 图片语法：<img src="..." />
-  const inlineRe = /<img[^>]*src=["']([^"']+)["'][^>]*>/gi;
   const problems = [];
 
   function checkUrl(url, loc) {
@@ -159,13 +146,8 @@ function checkFile(file, refs) {
     // 其它形式（如 data: 或 import）忽略
   }
 
-  // scan markdown image syntax
-  for (const m of content.matchAll(re)) {
-    checkUrl(m[1], "mdx");
-  }
-  // scan inline <img>
-  for (const m of content.matchAll(inlineRe)) {
-    checkUrl(m[1], "html");
+  for (const { url, kind } of extractImageRefs(content)) {
+    checkUrl(url, kind === "markdown" ? "mdx" : "html");
   }
 
   return problems;
