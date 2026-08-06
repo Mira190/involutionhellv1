@@ -21,11 +21,9 @@ import { source } from "@/lib/source";
 import leaderboard from "@/generated/site-leaderboard.json";
 import { SITE_URL } from "@/lib/site-url";
 import { routing, type Locale } from "@/i18n/routing";
-import { type PageData, type DateLike } from "@/app/types/doc";
 // 和 app/llms.txt/route.ts 共用，避免两边对 draft 过滤 / slug 编码各写一份
 import { docPathname, isDraftOrHidden } from "@/lib/doc-entry";
-
-type SourcePage = ReturnType<typeof source.getPages>[number];
+import { extractDateFromPage, type SourcePage } from "@/lib/doc-page-meta";
 
 /**
  * Next.js 调用的默认导出函数，生成整个站点的 Sitemap。
@@ -166,32 +164,4 @@ function buildDocsEntry(
     priority: 0.6,
     lastModified: fmDate,
   });
-}
-
-function extractDateFromPage(page: SourcePage): Date | undefined {
-  const data = (page.data ?? {}) as PageData;
-  const candidates: DateLike[] = [
-    data?.updatedAt,
-    data?.updated,
-    data?.lastUpdated,
-    data?.frontmatter?.updatedAt,
-    data?.frontmatter?.updated,
-    data?.frontmatter?.lastUpdated,
-    data?.date,
-    data?.frontmatter?.date,
-  ];
-  for (const c of candidates) {
-    const parsed = normalizeDate(c);
-    if (parsed) return parsed;
-  }
-  return undefined;
-}
-
-function normalizeDate(value: DateLike): Date | undefined {
-  if (!value) return undefined;
-  if (value instanceof Date) {
-    return isNaN(value.getTime()) ? undefined : value;
-  }
-  const d = new Date(value);
-  return isNaN(d.getTime()) ? undefined : d;
 }
