@@ -2,6 +2,7 @@ import { source } from "@/lib/source";
 import { SITE_URL } from "@/lib/site-url";
 import { ensureSeoDescription } from "@/lib/seo-description";
 import { type Locale } from "@/i18n/routing";
+import docDates from "@/generated/doc-dates.json";
 import { type PageData } from "@/app/types/doc";
 import {
   extractDateFromPage,
@@ -41,7 +42,11 @@ function latestDocs(locale: Locale): FeedEntry[] {
     .getPages(locale)
     .filter((page) => !isDraftOrHidden(page))
     .flatMap((page) => {
-      const date = extractDateFromPage(page);
+      // bot/[skip ci] 过滤后的 git 日期比 frontmatter date 可信，优先取用
+      const mapped = (docDates as Record<string, string>)[
+        `content/docs/${page.path}`
+      ];
+      const date = mapped ? new Date(mapped) : extractDateFromPage(page);
       return date ? [{ page, date }] : [];
     })
     .sort((a, b) => b.date.getTime() - a.date.getTime())

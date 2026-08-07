@@ -17,7 +17,8 @@ const CONFLICTS_PATH = path.join(ROOT, "generated", "translation-conflicts.md");
 const APPLY = process.env.APPLY === "1";
 const ADOPT_ONLY = process.env.ADOPT_ONLY === "1";
 const PROVIDER_NAME = process.env.PROVIDER ?? "anthropic";
-const MODEL = process.env.TRANSLATE_MODEL ?? "claude-opus-4-8";
+// Sonnet 级对 zh→en 技术文档已是 WMT 人评第一梯队，Opus 单价 ~5x 无质量必要
+const MODEL = process.env.TRANSLATE_MODEL ?? "claude-sonnet-5";
 const ONLY = process.env.ONLY ?? "";
 const ADOPT_CONFLICTS = process.env.ADOPT_CONFLICTS === "1";
 const MAX_UNITS = process.env.TRANSLATE_MAX_UNITS
