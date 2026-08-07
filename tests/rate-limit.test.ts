@@ -62,6 +62,10 @@ function makeRequest(ip = "1.2.3.4"): Request {
   });
 }
 
+// process.env.NODE_ENV 在 @types/node 里是只读字面量类型，测试要切换生产/开发
+// 分支只能经由可写视图赋值
+const mutableEnv = process.env as Record<string, string | undefined>;
+
 async function importRateLimit() {
   vi.resetModules();
   return import("@/lib/rate-limit");
@@ -72,7 +76,7 @@ beforeEach(() => {
     UPSTASH_ENV_VARS.map((k) => [k, process.env[k]]),
   );
   savedNodeEnv = process.env.NODE_ENV;
-  process.env.NODE_ENV = "test";
+  mutableEnv.NODE_ENV = "test";
   for (const k of UPSTASH_ENV_VARS) delete process.env[k];
   constructed.length = 0;
   limitCalls.length = 0;
@@ -84,8 +88,8 @@ afterEach(() => {
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;
   }
-  if (savedNodeEnv === undefined) delete process.env.NODE_ENV;
-  else process.env.NODE_ENV = savedNodeEnv;
+  if (savedNodeEnv === undefined) delete mutableEnv.NODE_ENV;
+  else mutableEnv.NODE_ENV = savedNodeEnv;
   vi.restoreAllMocks();
 });
 
@@ -100,7 +104,7 @@ describe("degradation without Upstash env", () => {
   });
 
   it("fails closed in production", async () => {
-    process.env.NODE_ENV = "production";
+    mutableEnv.NODE_ENV = "production";
     const { limitClassify, rateLimitResponse } = await importRateLimit();
     const result = await limitClassify(makeRequest());
     expect(result).toMatchObject({

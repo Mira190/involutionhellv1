@@ -18,6 +18,8 @@ function firstEnv(...names: string[]): string | undefined {
 }
 
 function getRedis(): Redis | null {
+  // Upstash env 名字随接入方式不同：手动复制是 UPSTASH_REDIS_REST_*，
+  // Vercel 集成是 KV_REST_API_*，带 prefix 的集成又是另一套，依次兜住
   const url = firstEnv(
     "UPSTASH_REDIS_REST_URL",
     "UPSTASH_REDIS_REST_KV_REST_API_URL",
@@ -32,6 +34,11 @@ function getRedis(): Redis | null {
   return new Redis({ url, token });
 }
 
+/**
+ * 防伪造：x-real-ip 由 Vercel/CDN 写入且不透传客户端伪造值，最可信；
+ * 退到 x-forwarded-for 时必须取**最后一个**非空项——第一个是客户端可以
+ * 随便伪造的值，取它等于把限流桶拱手让人绕过。
+ */
 function getClientIp(req: Request): string {
   const xri = req.headers.get("x-real-ip");
   if (xri && xri.trim()) return xri.trim();

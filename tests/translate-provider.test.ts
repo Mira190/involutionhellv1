@@ -3,8 +3,8 @@ import { createAnthropicProvider } from "../scripts/lib/translate-provider.mjs";
 
 describe("createAnthropicProvider", () => {
   it("bounds output and attaches a request timeout", async () => {
-    const fetchImpl = vi.fn(
-      async (_url: string | URL, _init?: RequestInit) =>
+    const fetchImpl = vi.fn<typeof fetch>(
+      async (_url: URL | RequestInfo, _init?: RequestInit) =>
         Response.json({
           stop_reason: "end_turn",
           content: [{ type: "text", text: "translated" }],

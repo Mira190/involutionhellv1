@@ -34,11 +34,19 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
 
+      # 手动 apply 缺 secret 要立刻报错；定时运行缺 secret 只跳过，
+      # 否则 secret 未 provision 前每周一次红色失败告警会被当噪音忽略
       - name: Require provider secret for APPLY runs
         run: |
           if [ "$APPLY_RUN" = "1" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "::error::ANTHROPIC_API_KEY is required for an APPLY run."
-            exit 1
+            if [ "${{ github.event_name }}" = "schedule" ]; then
+              echo "::notice::ANTHROPIC_API_KEY not provisioned; skipping scheduled translation sync."
+              echo "APPLY_RUN=" >> "$GITHUB_ENV"
+              echo "SKIP_RUN=1" >> "$GITHUB_ENV"
+            else
+              echo "::error::ANTHROPIC_API_KEY is required for an APPLY run."
+              exit 1
+            fi
           fi
 
       - name: Enable Corepack
@@ -85,7 +93,7 @@ jobs:
           pnpm lint
           pnpm typecheck
           pnpm build
-          unstaged="$(git diff --name-only)"
+          unstaged="$(git diff --name-only -- ':!generated/doc-dates.json')"
           untracked="$(git ls-files --others --exclude-standard)"
           if [ -n "$unstaged" ] || [ -n "$untracked" ]; then
             echo "::error::Validation produced files outside the staged translation transaction."
