@@ -55,9 +55,30 @@ jobs:
             exit 1
           fi
           echo "✅ Lockfile is consistent"
-      - run: pnpm run lint
-      - run: pnpm run lint:images
-      - run: pnpm run typecheck
+
+      - name: Run unit tests
+        run: pnpm test
+
+      - name: Run lint
+        run: pnpm lint
+
+      - name: Lint image references
+        run: pnpm lint:images
+
+      - name: Run typecheck
+        run: pnpm typecheck
+
+      - name: Build production application
+        run: pnpm build
+
+      - name: Verify build is reproducible
+        run: |
+          dirty="$(git status --porcelain)"
+          if [ -n "$dirty" ]; then
+            echo "::error::pnpm build mutated or created repository files. Build-time generators must be idempotent and their outputs must be committed explicitly."
+            printf '%s\n' "$dirty"
+            exit 1
+          fi
 
       # === IndexNow 提交（仅在 main 分支执行） ===
       - name: Install jq (for JSON build)

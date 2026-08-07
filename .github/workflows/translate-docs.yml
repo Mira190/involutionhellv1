@@ -2,12 +2,13 @@ name: Translate Docs
 
 permissions:
   contents: write
+  pull-requests: write
 
 on:
   workflow_dispatch:
     inputs:
       apply:
-        description: "Write .en files + TM and push a sync commit (unchecked = dry-run plan)"
+        description: "Generate translations and update the translation-sync PR"
         type: boolean
         default: true
   schedule:
@@ -17,48 +18,42 @@ concurrency:
   group: translate-docs
   cancel-in-progress: false
 
+env:
+  SYNC_BRANCH: automation/translation-sync
+
 jobs:
   translate:
     runs-on: ubuntu-latest
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       APPLY_RUN: ${{ (github.event_name == 'schedule' || inputs.apply) && '1' || '' }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-      # MOCK: 按模拟签核假定 ANTHROPIC_API_KEY 已在仓库 secrets 配好；真实
-      # provision 前该 job 检测到空 secret 会打印跳过原因并以成功状态退出
-      - name: Gate on ANTHROPIC_API_KEY
-        id: gate
-        run: |
-          if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "ANTHROPIC_API_KEY secret is not provisioned — skipping translation sync (no-op, exit 0)."
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - uses: actions/checkout@v4
-        if: steps.gate.outputs.run == 'true'
         with:
+          ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
 
+      - name: Require provider secret for APPLY runs
+        run: |
+          if [ "$APPLY_RUN" = "1" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY is required for an APPLY run."
+            exit 1
+          fi
+
       - name: Enable Corepack
-        if: steps.gate.outputs.run == 'true'
         run: corepack enable
 
       - uses: pnpm/action-setup@v4
-        if: steps.gate.outputs.run == 'true'
 
       - uses: actions/setup-node@v4
-        if: steps.gate.outputs.run == 'true'
         with:
           node-version: 22
           cache: "pnpm"
 
       - run: pnpm install --frozen-lockfile
-        if: steps.gate.outputs.run == 'true'
 
-      - name: Translate changed segments
-        if: steps.gate.outputs.run == 'true'
+      - name: Plan or generate changed translations
         run: |
           if [ "$APPLY_RUN" = "1" ]; then
             APPLY=1 TRANSLATE_MAX_UNITS=${{ vars.TRANSLATE_MAX_UNITS || 200 }} pnpm translate:docs
@@ -66,8 +61,8 @@ jobs:
             pnpm translate:docs
           fi
 
-      - name: Quality-gate the bot's own output (changed pairs, strict)
-        if: steps.gate.outputs.run == 'true' && env.APPLY_RUN == '1'
+      - name: Quality-gate generated translations
+        if: env.APPLY_RUN == '1'
         run: |
           git add -N content/docs
           if git diff --quiet HEAD -- content/docs; then
@@ -78,15 +73,65 @@ jobs:
               | xargs -r -d '\n' pnpm check:translations:quality --strict --changed
           fi
 
-      - name: Commit and push
-        if: steps.gate.outputs.run == 'true' && env.APPLY_RUN == '1'
+      - name: Stage generated transaction
+        if: env.APPLY_RUN == '1'
         run: |
           git add content/docs generated/translation-memory.json generated/translation-conflicts.md
+
+      - name: Validate generated transaction
+        if: env.APPLY_RUN == '1'
+        run: |
+          pnpm test
+          pnpm lint
+          pnpm typecheck
+          pnpm build
+          unstaged="$(git diff --name-only)"
+          untracked="$(git ls-files --others --exclude-standard)"
+          if [ -n "$unstaged" ] || [ -n "$untracked" ]; then
+            echo "::error::Validation produced files outside the staged translation transaction."
+            printf 'unstaged tracked files:\n%s\n' "$unstaged"
+            printf 'untracked files:\n%s\n' "$untracked"
+            echo "Fix the non-idempotent generator instead of committing hidden build side effects."
+            exit 1
+          fi
+
+      - name: Publish or update translation pull request
+        if: env.APPLY_RUN == '1'
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
           if git diff --cached --quiet; then
-            echo "nothing to commit"
+            echo "nothing to publish"
             exit 0
           fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore(i18n): 增量翻译同步 [translation-sync] [skip ci]"
-          git push || { git pull --rebase && git push; }
+          git checkout -B "$SYNC_BRANCH"
+          git commit -m "chore(i18n): incremental translation sync [translation-sync]"
+
+          remote_sha="$(git ls-remote --heads origin "$SYNC_BRANCH" | cut -f1)"
+          if [ -n "$remote_sha" ]; then
+            git push \
+              --force-with-lease="refs/heads/$SYNC_BRANCH:$remote_sha" \
+              origin "HEAD:refs/heads/$SYNC_BRANCH"
+          else
+            git push origin "HEAD:refs/heads/$SYNC_BRANCH"
+          fi
+
+          existing_pr="$(gh pr list \
+            --base "$DEFAULT_BRANCH" \
+            --head "$SYNC_BRANCH" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')"
+
+          if [ -n "$existing_pr" ]; then
+            echo "updated existing translation PR #$existing_pr"
+          else
+            gh pr create \
+              --base "$DEFAULT_BRANCH" \
+              --head "$SYNC_BRANCH" \
+              --title "chore(i18n): incremental translation sync" \
+              --body $'Automated incremental translation update.\n\nThis PR is intentionally reviewable and must pass the repository build, test, typecheck, and translation-quality checks before merge.'
+          fi

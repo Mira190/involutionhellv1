@@ -1,6 +1,7 @@
 const API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
-const MAX_TOKENS = 16000;
+const MAX_TOKENS = 8000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
 
 const SYSTEM_PROMPT = [
   "You are a professional technical translator for a computer-science and AI community knowledge base.",
@@ -19,10 +20,16 @@ export function createAnthropicProvider({
   apiKey,
   model,
   maxRetries = 2,
+  requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
   fetchImpl = fetch,
 }) {
   if (!apiKey) throw new Error("createAnthropicProvider: apiKey is required");
   if (!model) throw new Error("createAnthropicProvider: model is required");
+  if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) {
+    throw new Error(
+      "createAnthropicProvider: requestTimeoutMs must be a positive number",
+    );
+  }
 
   async function requestOnce(text) {
     const res = await fetchImpl(API_URL, {
@@ -38,6 +45,7 @@ export function createAnthropicProvider({
         system: SYSTEM_PROMPT,
         messages: [{ role: "user", content: text }],
       }),
+      signal: AbortSignal.timeout(requestTimeoutMs),
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
@@ -75,7 +83,9 @@ export function createAnthropicProvider({
           lastError = error;
           const retryable =
             error instanceof RetryableProviderError ||
-            error instanceof TypeError;
+            error instanceof TypeError ||
+            (error instanceof DOMException &&
+              (error.name === "TimeoutError" || error.name === "AbortError"));
           if (!retryable || attempt === maxRetries) throw error;
           await new Promise((resolve) =>
             setTimeout(resolve, 500 * 2 ** attempt),
@@ -100,8 +110,6 @@ export function createMockProvider({
         .split("\n")
         .map((line) => {
           if (line.trim() === "") return line;
-          // Block-level placeholders (fences, $$ math, import lines) must stay
-          // standalone or re-segmentation of the restored output breaks.
           if (/^(?:⟦PH\d+⟧\s*)+$/.test(line.trim())) return line;
           const m = line.match(
             /^(\s*(?:#{1,6}[ \t]+|[-*+][ \t]+|\d+\.[ \t]+|>[ \t]?)*)(.*)$/,

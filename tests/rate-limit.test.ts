@@ -53,6 +53,7 @@ const UPSTASH_ENV_VARS = [
 ];
 
 let savedEnv: Record<string, string | undefined>;
+let savedNodeEnv: string | undefined;
 
 function makeRequest(ip = "1.2.3.4"): Request {
   return new Request("http://localhost/api/test", {
@@ -70,6 +71,8 @@ beforeEach(() => {
   savedEnv = Object.fromEntries(
     UPSTASH_ENV_VARS.map((k) => [k, process.env[k]]),
   );
+  savedNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "test";
   for (const k of UPSTASH_ENV_VARS) delete process.env[k];
   constructed.length = 0;
   limitCalls.length = 0;
@@ -81,24 +84,37 @@ afterEach(() => {
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;
   }
+  if (savedNodeEnv === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = savedNodeEnv;
   vi.restoreAllMocks();
 });
 
 describe("degradation without Upstash env", () => {
-  it("limitChat allows the request and marks it skipped", async () => {
-    const { limitChat } = await importRateLimit();
-    const result = await limitChat(makeRequest());
-    expect(result.success).toBe(true);
-    expect(result.skipped).toBe(true);
+  it("allows local development requests and marks them skipped", async () => {
+    const { limitChat, limitClassify } = await importRateLimit();
+    const chat = await limitChat(makeRequest());
+    const classify = await limitClassify(makeRequest());
+    expect(chat).toMatchObject({ success: true, skipped: true });
+    expect(classify).toMatchObject({ success: true, skipped: true });
     expect(constructed).toHaveLength(0);
   });
 
-  it("limitClassify allows the request and marks it skipped", async () => {
-    const { limitClassify } = await importRateLimit();
+  it("fails closed in production", async () => {
+    process.env.NODE_ENV = "production";
+    const { limitClassify, rateLimitResponse } = await importRateLimit();
     const result = await limitClassify(makeRequest());
-    expect(result.success).toBe(true);
-    expect(result.skipped).toBe(true);
-    expect(constructed).toHaveLength(0);
+    expect(result).toMatchObject({
+      success: false,
+      unavailable: true,
+      limit: 0,
+      remaining: 0,
+    });
+
+    const response = rateLimitResponse(result);
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "rate_limit_unavailable",
+    });
   });
 
   it("warns only once per module lifecycle", async () => {

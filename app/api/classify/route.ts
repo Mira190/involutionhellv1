@@ -7,10 +7,16 @@ import { limitClassify, rateLimitResponse } from "@/lib/rate-limit";
 
 export const maxDuration = 15;
 
+const REQUEST_MAX_BYTES = 16 * 1024;
+const TITLE_MAX_CHARS = 300;
 const EXCERPT_MAX_CHARS = 2000;
 const MODEL_TIMEOUT_MS = 10_000;
 
-function noSuggestion(): Response {
+function noSuggestion(outcome: string, error?: unknown): Response {
+  console.warn("[classify] no suggestion", {
+    outcome,
+    error: error instanceof Error ? `${error.name}: ${error.message}` : undefined,
+  });
   return Response.json({ slug: null, confidence: 0 });
 }
 
@@ -18,27 +24,40 @@ export async function POST(req: Request) {
   const rl = await limitClassify(req);
   if (!rl.success) return rateLimitResponse(rl);
 
-  let title: unknown;
-  let excerpt: unknown;
+  const declaredLength = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > REQUEST_MAX_BYTES) {
+    return Response.json({ error: "Request body too large" }, { status: 413 });
+  }
+
+  let body: Record<string, unknown>;
   try {
-    const body = (await req.json()) as Record<string, unknown>;
-    title = body?.title;
-    excerpt = body?.excerpt;
+    const raw = await req.text();
+    if (new TextEncoder().encode(raw).byteLength > REQUEST_MAX_BYTES) {
+      return Response.json({ error: "Request body too large" }, { status: 413 });
+    }
+    body = JSON.parse(raw) as Record<string, unknown>;
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
+
+  const title = body?.title;
+  const excerpt = body?.excerpt;
   if (typeof title !== "string" || typeof excerpt !== "string") {
     return Response.json(
       { error: "title and excerpt must be strings" },
       { status: 400 },
     );
   }
+  if (!title.trim()) {
+    return Response.json({ error: "title must not be empty" }, { status: 400 });
+  }
+  if (title.length > TITLE_MAX_CHARS) {
+    return Response.json({ error: "title is too long" }, { status: 400 });
+  }
 
-  // 分类是纯锦上添花的建议：模型/解析/超时任何失败都静默降级为无建议，
-  // 绝不因此给表单返回 5xx
   try {
     const sections = extractTopLevelSections(source.getPageTree("zh"));
-    if (sections.length === 0) return noSuggestion();
+    if (sections.length === 0) return noSuggestion("no_sections");
 
     const slugs = sections.map((s) => s.slug) as [string, ...string[]];
     const schema = z.object({
@@ -51,6 +70,7 @@ export async function POST(req: Request) {
       .map((s) => (s.name === s.slug ? s.slug : `${s.slug}（${s.name}）`))
       .join("、");
 
+    const startedAt = Date.now();
     const { object } = await generateObject({
       model: getModel("intern"),
       schema,
@@ -63,12 +83,24 @@ export async function POST(req: Request) {
       abortSignal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
     });
 
+    console.info("[classify] suggestion", {
+      outcome: object.confidence >= 0.5 ? "suggested" : "low_confidence",
+      slug: object.slug,
+      confidence: object.confidence,
+      latencyMs: Date.now() - startedAt,
+    });
+
     return Response.json({
       slug: object.slug,
       confidence: object.confidence,
       reason: object.reason.slice(0, 200),
     });
-  } catch {
-    return noSuggestion();
+  } catch (error) {
+    return noSuggestion(
+      error instanceof DOMException && error.name === "TimeoutError"
+        ? "provider_timeout"
+        : "provider_error",
+      error,
+    );
   }
 }
