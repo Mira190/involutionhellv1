@@ -93,7 +93,7 @@ jobs:
           pnpm lint
           pnpm typecheck
           pnpm build
-          unstaged="$(git diff --name-only -- ':!generated/doc-dates.json')"
+          unstaged="$(git diff --name-only)"
           untracked="$(git ls-files --others --exclude-standard)"
           if [ -n "$unstaged" ] || [ -n "$untracked" ]; then
             echo "::error::Validation produced files outside the staged translation transaction."

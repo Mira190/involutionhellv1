@@ -1,0 +1,42 @@
+name: Refresh Doc Dates
+
+# doc-dates.json 只能在完整历史下生成（浅克隆会把所有文档算成同一天），
+# 因此不进 prebuild，由本 job 定期刷新后 commit。
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 18 * * 0"
+
+concurrency:
+  group: refresh-doc-dates
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: corepack enable
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm docs:dates
+      - name: Commit refreshed dates
+        run: |
+          if git diff --quiet -- generated/doc-dates.json; then
+            echo "doc-dates.json already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add generated/doc-dates.json
+          git commit -m "chore(docs): refresh doc dates [skip ci]"
+          git push || (git pull --rebase && git push)

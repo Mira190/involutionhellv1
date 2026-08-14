@@ -3,6 +3,23 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+/**
+ * 浅克隆（Vercel 构建默认带 --depth）下 `git log` 只看得到一两个 commit，
+ * 全部文档会被算成同一天——比没有日期更糟。宁可拒绝生成也不写坏数据。
+ */
+function assertFullHistory(root) {
+  const shallow = execFileSync("git", ["rev-parse", "--is-shallow-repository"], {
+    cwd: root,
+    encoding: "utf8",
+  }).trim();
+  if (shallow === "true") {
+    console.error(
+      "[doc-dates] refusing to run in a shallow clone: every doc would collapse to the checkout date. Re-run with full history (fetch-depth: 0).",
+    );
+    process.exit(1);
+  }
+}
+
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -77,6 +94,7 @@ const isMain =
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isMain) {
+  assertFullHistory(repoRoot);
   const dates = buildDocDates();
   mkdirSync(path.join(repoRoot, "generated"), { recursive: true });
   writeFileSync(

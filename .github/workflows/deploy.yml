@@ -71,11 +71,9 @@ jobs:
       - name: Build production application
         run: pnpm build
 
-      # generated/doc-dates.json 由 git 历史推导：任何新 commit 都会改变它，
-      # 要求它 build 后字节不变在构造上不可满足，故排除；其余产物仍须同步。
       - name: Verify build does not mutate sources
         run: |
-          dirty="$(git status --porcelain -- ':!generated/doc-dates.json')"
+          dirty="$(git status --porcelain)"
           if [ -n "$dirty" ]; then
             echo "::error::pnpm build mutated or created repository files. Build-time generators must be idempotent and their outputs committed."
             printf '%s\n' "$dirty"
