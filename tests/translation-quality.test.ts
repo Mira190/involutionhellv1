@@ -118,7 +118,8 @@ describe("fence integrity", () => {
     const findings = check(SOURCE, translatedFence);
     const fence = findings.filter((f) => f.rule === "fence-integrity");
     expect(fence).toHaveLength(1);
-    expect(fence[0].message).toContain("content differs");
+    expect(fence[0].severity).toBe("error");
+    expect(fence[0].message).toContain("executable code differs");
   });
 
   it("detects a dropped fence via count mismatch", () => {
@@ -139,6 +140,66 @@ describe("fence integrity", () => {
     expect(
       findings.find((f) => f.rule === "fence-integrity")!.message,
     ).toContain("info string mismatch");
+  });
+});
+
+describe("fence integrity — 按语言分级", () => {
+  it("可执行 fence 仅注释不同 → info 而非 error", () => {
+    const commentOnly = TARGET.replace("# 注释保持原样", "# comment translated");
+    const fence = check(SOURCE, commentOnly).filter(
+      (f) => f.rule === "fence-integrity",
+    );
+    expect(fence).toHaveLength(1);
+    expect(fence[0].severity).toBe("info");
+    expect(fence[0].message).toContain("translated-comments");
+  });
+
+  it("含 CJK 的尖括号占位符被翻译 → 放行", () => {
+    const src = SOURCE.replace(
+      'print("你好")',
+      '$ mv /home/<你的用户名>/a /b',
+    ).replace("```python", "```sh");
+    const tgt = TARGET.replace(
+      'print("你好")',
+      "$ mv /home/<your-username>/a /b",
+    ).replace("```python", "```sh");
+    const fence = check(src, tgt).filter((f) => f.rule === "fence-integrity");
+    expect(fence).toHaveLength(1);
+    expect(fence[0].severity).toBe("info");
+  });
+
+  it("纯 ASCII 尖括号（真代码）被改动 → 仍报 error", () => {
+    const src = SOURCE.replace(
+      'print("你好")',
+      "#include <vector>",
+    ).replace("```python", "```cpp");
+    const tgt = TARGET.replace(
+      'print("你好")',
+      "#include <向量>",
+    ).replace("```python", "```cpp");
+    const fence = check(src, tgt).filter((f) => f.rule === "fence-integrity");
+    expect(fence).toHaveLength(1);
+    expect(fence[0].severity).toBe("error");
+  });
+
+  it("非可执行 fence（json 示意）内容翻译 → 放行", () => {
+    const src = SOURCE.replace(
+      'print("你好")',
+      'content: <完整上下文>',
+    ).replace("```python", "```json");
+    const tgt = TARGET.replace(
+      'print("你好")',
+      "content: <full context>",
+    ).replace("```python", "```json");
+    const fence = check(src, tgt).filter((f) => f.rule === "fence-integrity");
+    expect(fence).toHaveLength(0);
+  });
+
+  it("unicode 转义与字面量等价 → 放行", () => {
+    const tgt = TARGET.replace('print("你好")', 'print("\\u4f60\\u597d")');
+    const src = SOURCE.replace("# 注释保持原样", "# 注释保持原样");
+    const fence = check(src, tgt).filter((f) => f.rule === "fence-integrity");
+    expect(fence.filter((f) => f.severity === "error")).toHaveLength(0);
   });
 });
 

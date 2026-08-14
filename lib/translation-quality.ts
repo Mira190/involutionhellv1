@@ -18,7 +18,7 @@ export type QualityRule =
 
 export interface QualityFinding {
   rule: QualityRule;
-  severity: "error" | "warning";
+  severity: "error" | "warning" | "info";
   message: string;
 }
 
@@ -74,6 +74,55 @@ function proseLines(body: string): { lineNo: number; text: string }[] {
     }));
 }
 
+/**
+ * 可执行语言：只有这类 fence 的**非注释**内容改变才是真事故。
+ * json/yaml/text/无 info 的 fence 常被当作示意结构，内含自然语言占位符
+ * （如 `<完整上下文>`），翻译它们是改善而不是缺陷。
+ */
+const EXECUTABLE_FENCE =
+  /^(c|cpp|c\+\+|java|js|javascript|jsx|ts|typescript|tsx|go|rust|py|python|sh|bash|shell|zsh|sql|kotlin|swift|scala|php|cs|lua|r|ruby|perl|make|dockerfile)$/;
+
+/**
+ * 注释剥离刻意宽松：语料里存在 bash fence 用 `//` 写注释这类非法但常见的
+ * 写法，按语言严格选注释符会把注释翻译误报成代码改动。
+ */
+function stripComments(code: string): string {
+  return code
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "")
+    // `#` 开头的 C/C++ 预处理指令是代码不是注释，剥掉会让 `#include <vector>`
+    // 被翻译成 `#include <向量>` 也判等
+    .replace(/#(?!\s*(include|define|ifn?def|endif|pragma|undef|elif|if|else|error|line)\b)[^\n]*/g, "")
+    .replace(/--[^\n]*/g, "");
+}
+
+/**
+ * 含 CJK 的 `<尖括号占位符>`（`<你的用户名>` / `<服务名字>`）是留给读者替换的
+ * 提示文本，翻译它对英文读者是必要的；而 `#include <vector>` 这类纯 ASCII
+ * 尖括号是真代码，任何改动仍要报错——所以只按"源侧含 CJK"这一条归一。
+ */
+function maskCjkPlaceholders(code: string): string {
+  return code.replace(/<[^<>\n]*[\u4e00-\u9fff\u3400-\u4dbf][^<>\n]*>/g, "<ph>");
+}
+
+/** 源侧确认是占位符场景后，目标侧的 `<your-username>` 也按同一 token 归一。 */
+function maskAnyPlaceholder(code: string): string {
+  return code.replace(/<[^<>\n]+>/g, "<ph>");
+}
+
+/** `'\u2b1c'` 与字面量 `⬜` 在源码里等价，比较前统一展开再 NFC 归一。 */
+function normalizeCode(code: string): string {
+  const unescaped = code.replace(/\\u\{?([0-9a-fA-F]{4,6})\}?/g, (m, hex) => {
+    const cp = Number.parseInt(hex, 16);
+    return Number.isFinite(cp) ? String.fromCodePoint(cp) : m;
+  });
+  return unescaped.normalize("NFC").replace(/\s+/g, "");
+}
+
+function fenceLang(info: string): string {
+  return (info || "").toLowerCase().trim().split(/\s+/)[0] ?? "";
+}
+
 function checkFenceIntegrity(
   sourceBody: string,
   targetBody: string,
@@ -100,10 +149,24 @@ function checkFenceIntegrity(
       });
     }
     if (sf.content !== tf.content) {
+      const lang = fenceLang(sf.info);
+      const label = `fence #${i + 1} (target line ${tf.openLine}, ${sf.info || "no info"})`;
+      if (!EXECUTABLE_FENCE.test(lang)) {
+        // 示意性 fence：结构（数量/info）已单独校验，内容差异属正常翻译
+        return;
+      }
+      const sourceHasPlaceholder = maskCjkPlaceholders(sf.content) !== sf.content;
+      const norm = (code: string, mask: boolean) =>
+        normalizeCode(stripComments(mask ? maskAnyPlaceholder(code) : code));
+      const codeChanged =
+        norm(sf.content, sourceHasPlaceholder) !==
+        norm(tf.content, sourceHasPlaceholder);
       findings.push({
         rule: "fence-integrity",
-        severity: "error",
-        message: `fence #${i + 1} (target line ${tf.openLine}, ${sf.info || "no info"}) content differs from source — fences must never be translated`,
+        severity: codeChanged ? "error" : "info",
+        message: codeChanged
+          ? `${label} executable code differs from source — code must never be translated`
+          : `${label} only comments/placeholders differ (translated-comments)`,
       });
     }
   });

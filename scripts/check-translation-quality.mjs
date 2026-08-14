@@ -117,8 +117,10 @@ function main() {
   const docExists = (repoRelPath) =>
     fs.existsSync(path.join(ROOT, repoRelPath));
 
-  const totals = { error: 0, warning: 0 };
-  const byRule = new Map(RULES.map((rule) => [rule, { error: 0, warning: 0 }]));
+  const totals = { error: 0, warning: 0, info: 0 };
+  const byRule = new Map(
+    RULES.map((rule) => [rule, { error: 0, warning: 0, info: 0 }]),
+  );
   let pairsWithFindings = 0;
 
   for (const pair of pairs) {
@@ -150,11 +152,12 @@ function main() {
   console.log(`pairs with findings:  ${pairsWithFindings}`);
   console.log(`errors:               ${totals.error}`);
   console.log(`warnings:             ${totals.warning}`);
-  console.log("\nby rule (errors/warnings):");
+  console.log(`info:                 ${totals.info}`);
+  console.log("\nby rule (errors/warnings/info):");
   for (const rule of RULES) {
     const counts = byRule.get(rule);
     console.log(
-      `  ${rule.padEnd(16)} ${String(counts.error).padStart(4)} / ${counts.warning}`,
+      `  ${rule.padEnd(16)} ${String(counts.error).padStart(4)} / ${counts.warning} / ${counts.info}`,
     );
   }
 
