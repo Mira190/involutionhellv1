@@ -52,6 +52,14 @@ function getDeletedDocFiles() {
         { cwd: ROOT, encoding: "utf-8" },
       ).trim();
     } catch {
+      if (process.env.GITHUB_ACTIONS) {
+        console.error(
+          "::error::check-doc-paths 拿不到 diff 基线（origin/" +
+            BASE_REF +
+            " 不存在）——门禁静默空转比失败更糟。检查 checkout 的 fetch-depth。",
+        );
+        process.exit(1);
+      }
       console.log("⚠️  无法获取 git diff，跳过 doc path 检查");
       process.exit(0);
     }

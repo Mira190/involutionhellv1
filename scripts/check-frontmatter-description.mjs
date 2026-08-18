@@ -151,7 +151,15 @@ function listChangedMdxFiles() {
       addLines(out);
       return [...candidates];
     } catch {
-      // 失败回退到本地策略
+      if (process.env.GITHUB_ACTIONS) {
+        console.error(
+          "::error::check:frontmatter 在 CI 里拿不到 origin/" +
+            baseRef +
+            " diff 基线——本地回退策略在 CI 下检查不到 PR 内容，直接失败。",
+        );
+        process.exit(1);
+      }
+      // 本地环境失败回退到暂存区/工作树策略
     }
   }
 

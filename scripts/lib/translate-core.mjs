@@ -190,6 +190,13 @@ function decideUnit({ unit, docTm, docHasTm, machineHashes, adoptConflicts }) {
   const entry = docTm[unit.hash];
   const current = unit.current;
   const currentHash = current == null ? null : hashText(current);
+  // 目标段与源段逐字节相同 = 上次 placeholder 失败写回的未翻译原文，
+  // 不是人工编辑——有 TM 就复用译文，没有就重试，绝不判 conflict/adopt
+  //（否则失败段永久卡死，ADOPT_CONFLICTS 还会把原文毒化进 TM）。
+  // 纯代码段的 entry.targetHash 本就等于 unit.hash，reuse 结果不变。
+  if (currentHash != null && currentHash === unit.hash) {
+    return entry ? "reuse" : "translate";
+  }
   if (entry) {
     if (currentHash == null || currentHash === entry.targetHash) {
       return "reuse";

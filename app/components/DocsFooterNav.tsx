@@ -1,4 +1,5 @@
-import { Link } from "@/i18n/navigation";
+// fumadocs 的 page.url 已带 locale 前缀，再走 i18n Link 会二次加前缀
+import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 

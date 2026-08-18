@@ -154,10 +154,13 @@ function DocsAssistantInner({ pageContext }: DocsAssistantProps) {
     [chatId, provider],
   );
 
-  // 组件挂载时上报打开事件
+  // 助手真正被打开前不产生任何服务端请求：组件挂在全部文档页上，
+  // mount 即请求会把 SSG 页面变成每次浏览一次函数调用
+  const [hasOpened, setHasOpened] = useState(false);
+
   useEffect(() => {
-    logAnalyticsEvent("assistant_opened");
-  }, [logAnalyticsEvent]);
+    if (hasOpened) logAnalyticsEvent("assistant_opened");
+  }, [hasOpened, logAnalyticsEvent]);
 
   const chat = useChat({
     // ai-sdk/react 的 useChat 只在 id 改变时重建内部 Chat 实例；
@@ -184,8 +187,8 @@ function DocsAssistantInner({ pageContext }: DocsAssistantProps) {
 
   // 初次加载欢迎建议的 Effect
   useEffect(() => {
-    // 只有在没消息、且还没尝试获取过时才去拉取
-    if (messages.length === 0 && !fetchedWelcomeRef.current) {
+    // 只有在助手打开后、没消息、且还没尝试获取过时才去拉取
+    if (hasOpened && messages.length === 0 && !fetchedWelcomeRef.current) {
       fetchedWelcomeRef.current = true;
       setIsLoadingWelcome(true);
 
@@ -216,7 +219,7 @@ function DocsAssistantInner({ pageContext }: DocsAssistantProps) {
         }
       })();
     }
-  }, [messages.length, pageContext, provider, apiKey]);
+  }, [hasOpened, messages.length, pageContext, provider, apiKey]);
 
   // 跟踪上一次的状态，用于检测对话结束
   const prevStatusRef = useRef(chatStatus);
@@ -359,6 +362,7 @@ function DocsAssistantInner({ pageContext }: DocsAssistantProps) {
         isLoadingSuggestions={showSuggestionsLoader}
         welcomeSuggestions={welcomeSuggestions}
         isLoadingWelcome={isLoadingWelcome}
+        onOpenChange={(open) => open && setHasOpened(true)}
       />
     </AssistantRuntimeProvider>
   );

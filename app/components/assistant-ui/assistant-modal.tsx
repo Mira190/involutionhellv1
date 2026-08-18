@@ -18,6 +18,7 @@ interface AssistantModalProps {
   isLoadingSuggestions?: boolean;
   welcomeSuggestions?: WelcomeSuggestion[];
   isLoadingWelcome?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export const AssistantModal: FC<AssistantModalProps> = ({
@@ -28,6 +29,7 @@ export const AssistantModal: FC<AssistantModalProps> = ({
   isLoadingSuggestions,
   welcomeSuggestions,
   isLoadingWelcome,
+  onOpenChange,
 }) => {
   const [showBubble, setShowBubble] = useState(false);
   // 受控状态：允许模态框内部的 X 按钮主动关闭窗口
@@ -68,7 +70,13 @@ export const AssistantModal: FC<AssistantModalProps> = ({
   };
 
   return (
-    <AssistantModalPrimitive.Root open={open} onOpenChange={setOpen}>
+    <AssistantModalPrimitive.Root
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        onOpenChange?.(next);
+      }}
+    >
       <AssistantModalPrimitive.Anchor className="aui-root aui-modal-anchor fixed right-4 bottom-4 size-14">
         {/* 自定义气泡组件 */}
         {showBubble && (

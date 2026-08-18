@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { cache } from "react";
 import { source, hasLanguageVersion } from "@/lib/source";
 import { safeJsonLdString } from "@/lib/json-ld";
 import { SITE_URL } from "@/lib/site-url";
@@ -60,18 +61,24 @@ function toRelatedCandidate(
   };
 }
 
-// 优先用 BACKEND_URL（本地开发/Vercel 配置），兜底用生产地址避免 localhost 连不上
-const BACKEND_URL = process.env.BACKEND_URL ?? "https://api.involutionhell.com";
+// 不设生产兜底：本地/preview 未配 BACKEND_URL 时跳过历史路径解析（直接 404），
+// 否则 dev 环境会拿生产 doc_paths 数据发 308，且 permanentRedirect 被浏览器缓存
+const BACKEND_URL = process.env.BACKEND_URL;
 
 /**
  * 查询后端 resolve 端点，未知路径可能是历史重命名路径。
  * 返回 canonical URL（如 /docs/learn/cs/dev-tips/git101）或 null。
  * 后端 Caffeine 缓存 TTL=600s，命中率高，延迟可控。
  */
-async function resolveDocPath(
+// React cache()：generateMetadata 与页面组件同一请求内各调一次，
+// 不去重就是双倍后端往返。注意 fetch 传 signal 会使 Next 自身的请求
+// memoization 失效，且本端点只回 3xx/404、Data Cache 只存 200——
+// 跨请求缓存要等后端改 200+JSON 才可能成立。
+const resolveDocPath = cache(async function resolveDocPath(
   locale: string,
   slug: string[],
 ): Promise<string | null> {
+  if (!BACKEND_URL) return null;
   const strippedPath = `/docs/${slug.join("/")}`;
   try {
     const controller = new AbortController();
@@ -82,7 +89,6 @@ async function resolveDocPath(
       {
         redirect: "manual",
         signal: controller.signal,
-        next: { revalidate: 300 }, // 缓存 5 分钟，防止 bot 扫描频繁触发冷启动与后端查询
         // 显式 UA：Vercel SSR 默认出口 UA 可能被 CF bot filter 拦（对齐 feed/page fetchLinks）
         headers: {
           accept: "application/json",
@@ -114,7 +120,7 @@ async function resolveDocPath(
     });
   }
   return null;
-}
+});
 
 interface Param {
   params: Promise<{

@@ -65,6 +65,56 @@ async function freshTranslate(sourceRaw = SOURCE) {
   };
 }
 
+describe("processDoc — placeholder 失败段的重试闭环", () => {
+  it("目标段等于源段（上次失败写回的原文）→ 判 translate 重试，不判 conflict", async () => {
+    // 先正常翻译一遍拿到 TM 与目标文件
+    const { result, tm } = await freshTranslate();
+    // 模拟历史失败：把目标文件里"结语"段替换回中文源文
+    const failedTarget = result
+      .output!.replace("## [en] 结语", "## 结语")
+      .replace("[en] 最后一段。", "最后一段。");
+    expect(failedTarget).not.toBe(result.output);
+    const provider = createMockProvider();
+    const second = await processDoc({
+      sourceRaw: SOURCE,
+      targetRaw: failedTarget,
+      docId: "doc-test-1",
+      sourcePath: "content/docs/test.mdx",
+      tm,
+      provider,
+      mode: "apply",
+      now: FIXED_NOW,
+    });
+    expect(second.stats.conflicts).toBe(0);
+    expect(second.output).toContain("[en] 最后一段。");
+  });
+
+  it("TM 里没有该段（真实失败场景）→ 判 translate 重试", async () => {
+    const { result, tm } = await freshTranslate();
+    const failedTarget = result
+      .output!.replace("## [en] 结语", "## 结语")
+      .replace("[en] 最后一段。", "最后一段。");
+    expect(failedTarget).not.toBe(result.output);
+    const doc = tm.entries["doc-test-1"];
+    for (const [hash, entry] of Object.entries(doc)) {
+      if (entry.target.includes("最后一段")) delete doc[hash];
+    }
+    const second = await processDoc({
+      sourceRaw: SOURCE,
+      targetRaw: failedTarget,
+      docId: "doc-test-1",
+      sourcePath: "content/docs/test.mdx",
+      tm,
+      provider: createMockProvider(),
+      mode: "apply",
+      now: FIXED_NOW,
+    });
+    expect(second.stats.conflicts).toBe(0);
+    expect(second.stats.translated).toBeGreaterThanOrEqual(1);
+    expect(second.output).toContain("[en] 最后一段。");
+  });
+});
+
 describe("placeholder protection", () => {
   it("masks fences, inline code, math, URLs, tags and import lines", () => {
     const { masked, tokens } = protectPlaceholders(

@@ -16,7 +16,7 @@
  */
 
 import { describe, expect, test } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(__dirname, "..");
@@ -100,6 +100,50 @@ describe("proxy.ts matcher 必须排除所有 backend rewrite 路径", () => {
         `加了新 rewrite 不带 /api/ 前缀的话，必须同步更新 proxy.ts 的 matcher 排除组。
 当前缺少 "${seg}"，否则 next-intl middleware 会把请求 redirect 到 /<locale>/${seg}/...
 导致 rewrite 不匹配，落到 [locale]/${seg}/... 404（参考 PR #335 登录炸事故）。`,
+      ).toContain(seg);
+    },
+  );
+});
+
+/**
+ * 同一失败类的另一半：app/ 根目录下不在 [locale] 里的无点号路由段
+ * （如 /og/...）同样会被 middleware 劫持成 /<locale>/<seg>/... 404。
+ * 带点号的（rss.xml / robots.txt / search.*.json / llms.txt / sitemap.xml）
+ * 已被 matcher 的 .*\..* 规则排除，这里只盯无点号的目录段。
+ */
+describe("proxy.ts matcher 必须排除 app 根下非 [locale] 的无点号路由段", () => {
+  const exclusions = extractMatcherExclusions();
+  const appRoot = join(ROOT, "app");
+  function containsRouteFile(dir: string): boolean {
+    return readdirSync(dir, { withFileTypes: true }).some((e) =>
+      e.isDirectory()
+        ? containsRouteFile(join(dir, e.name))
+        : /^(route|page)\.(ts|tsx|js|jsx)$/.test(e.name),
+    );
+  }
+  const routeSegments = readdirSync(appRoot, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .filter(
+      (name) =>
+        !name.startsWith("[") &&
+        !name.startsWith("_") &&
+        !name.includes(".") &&
+        name !== "api" &&
+        containsRouteFile(join(appRoot, name)),
+    );
+
+  test("能扫到至少一个此类路由段（og），防 readdir 失效静默通过", () => {
+    expect(routeSegments).toContain("og");
+  });
+
+  test.each(routeSegments)(
+    'app 根路由段 "%s" 必须在 matcher 排除组里',
+    (seg) => {
+      expect(
+        exclusions,
+        `app/${seg}/ 是 [locale] 之外的无点号路由，next-intl middleware 会把
+/${seg}/... 307 到 /<locale>/${seg}/... 404。往 proxy.ts matcher 排除组加 "${seg}"。`,
       ).toContain(seg);
     },
   );

@@ -31,6 +31,8 @@ jobs:
       CI: "true"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # Enable corepack to ensure the exact pnpm version from package.json is used
       - name: Enable Corepack
