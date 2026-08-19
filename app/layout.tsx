@@ -61,9 +61,11 @@ export const metadata: Metadata = {
   // 下的路径（如 /sitemap.xml 详情页 fallback 时）也能正确给出语言关系。
   alternates: {
     canonical: "/zh",
+    // zh-Hans（按文字不锁地区）：受众是海外简中读者，与 docs 页 / sitemap
+    // 的 hreflang 码保持字节一致
     languages: {
-      "zh-CN": "/zh",
-      "en-US": "/en",
+      "zh-Hans": "/zh",
+      en: "/en",
       "x-default": "/zh",
     },
   },
@@ -212,7 +214,7 @@ export default function RootLayout({
               name: "Involution Hell",
               alternateName: ["内卷地狱"],
               url: SITE_URL,
-              inLanguage: ["zh-CN", "en-US"],
+              inLanguage: ["zh-Hans", "en"],
               potentialAction: {
                 "@type": "SearchAction",
                 target: {

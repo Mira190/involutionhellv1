@@ -510,5 +510,13 @@
   },
   "shareLink": {
     "button": "Share a Link"
+  },
+  "translationNotice": {
+    "machine": "This page is an AI translation of the {source} original and has not been fully human-reviewed; changes were made to the original work.",
+    "readOriginal": "Read the original",
+    "license": "Original © its contributors, CC BY-NC-SA 4.0.",
+    "fallback": "This page has not been translated yet — showing the Chinese original.",
+    "sourceZh": "Chinese",
+    "sourceEn": "English"
   }
 }

@@ -1,4 +1,9 @@
-import { defineDocs, defineConfig } from "fumadocs-mdx/config";
+import {
+  defineDocs,
+  defineConfig,
+  frontmatterSchema,
+} from "fumadocs-mdx/config";
+import { z } from "zod";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { visit } from "unist-util-visit";
@@ -16,8 +21,43 @@ import type { Root } from "mdast";
  * 路由仍由 app/[locale]/docs/[...slug]/page.tsx 渲染，base URL 见
  * lib/source.ts 的 loader 配置。
  */
+/**
+ * date 在语料里有 ≥10 种写法：带引号字符串、未加引号的 ISO-8601（YAML 会解析成
+ * Date 对象）、"YYYY.MM.DD H:MM" 等，schema 必须全收，否则 build 失败。
+ */
+const dateLike = z.union([z.string(), z.date(), z.number()]).optional();
+
 export const docs = defineDocs({
   dir: "content/docs",
+  docs: {
+    /**
+     * 必须显式扩展 frontmatter schema：fumadocs-mdx 默认 schema 只保留
+     * {title, description, icon, full, _openapi}，其余字段在 loader 校验时
+     * 被剥掉 —— page.data.docId / lang / translatedFrom 运行时全是 undefined，
+     * 搜索分片过滤、翻译标注、draft 过滤、Giscus docId 都会静默失效。
+     * 不用 looseObject 透传：索引签名会把 page.data.toc / body 的类型吃成
+     * unknown；语料里出现过的历史字段在这里显式列全。
+     */
+    schema: frontmatterSchema.extend({
+      docId: z.string().optional(),
+      lang: z.string().optional(),
+      translatedFrom: z.string().optional(),
+      translatedAt: dateLike,
+      translatorAgent: z.string().optional(),
+      date: dateLike,
+      updated: dateLike,
+      updatedAt: dateLike,
+      lastUpdated: dateLike,
+      draft: z.boolean().optional(),
+      hidden: z.boolean().optional(),
+      noTranslate: z.boolean().optional(),
+      tags: z.unknown().optional(),
+      abbrlink: z.union([z.string(), z.number()]).optional(),
+      status: z.string().optional(),
+      category: z.unknown().optional(),
+      categories: z.unknown().optional(),
+    }),
+  },
 });
 
 /**

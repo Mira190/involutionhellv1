@@ -1,12 +1,13 @@
 ---
 title: "LeetCode Solution Manager：本地题解管理工具"
-description: "一个用于创建、整理和追踪个人 LeetCode Python 题解的轻量命令行工具。"
+description: "轻量命令行工具：按题号创建个人 LeetCode Python 题解文件，支持完成标记、一致性检查与自动进度报告，适合日常刷题积累。"
 date: "2026-07-24"
 tags:
   - "LeetCode"
   - "Python"
   - "CLI"
   - "算法"
+docId: d9mcgzp5w757ilw8sohtnnap
 ---
 
 # LeetCode Solution Manager
@@ -17,11 +18,11 @@ tags:
 
 ## 功能
 
-* 根据题号创建 Python 解题文件，并记录题目元数据。
-* 用 solve 标记一个或多个已完成题目，自动生成进度报告。
-* 用 check 检查题解文件、登记记录和进度报告是否一致。
-* 支持归档、移除题目，以及安全刷新自动生成的内容。
-* progress.md 中可直接点击题目标题打开本地题解，或通过 Problem 链接跳转到对应题目页面。
+- 根据题号创建 Python 解题文件，并记录题目元数据。
+- 用 solve 标记一个或多个已完成题目，自动生成进度报告。
+- 用 check 检查题解文件、登记记录和进度报告是否一致。
+- 支持归档、移除题目，以及安全刷新自动生成的内容。
+- progress.md 中可直接点击题目标题打开本地题解，或通过 Problem 链接跳转到对应题目页面。
 
 ## 快速开始
 

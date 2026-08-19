@@ -7,6 +7,7 @@ tags:
   - LLMs
   - arXiv
 docId: l6eepr5ctjgrhdgupy3twr1t
+lang: en
 ---
 
 &lt;https://arxiv.org/pdf/2512.14982&gt;

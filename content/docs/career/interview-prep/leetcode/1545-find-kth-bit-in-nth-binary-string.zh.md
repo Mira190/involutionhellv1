@@ -8,6 +8,7 @@ tags:
   - Math
   - String
 docId: zuoplhoodv7tzfgku0pwzi6w
+lang: zh
 ---
 
 # 题目

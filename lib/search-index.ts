@@ -5,6 +5,7 @@ import type { StructuredData } from "fumadocs-core/mdx-plugins";
 import { source } from "@/lib/source";
 import { basename, extname } from "path";
 import { type PageData } from "@/app/types/doc";
+import { isEnglishFile } from "@/lib/translation-status";
 
 type Page = ReturnType<typeof source.getPages>[number];
 
@@ -38,10 +39,12 @@ export async function pageToIndex(page: Page): Promise<AdvancedIndex> {
 }
 
 /**
- * 判断一个 fumadocs 页面是否为英文翻译版。
- * 翻译版 frontmatter 会声明 `lang: "en"` 且通常 `translatedFrom: "zh"`。
+ * 判断一个 fumadocs 页面是否为英文内容文件。
+ *
+ * 用文件路径后缀（.en.md/.en.mdx）而不是 frontmatter lang 字段：
+ * en locale 的 getPages("en") 会包含 fallback 继承的 zh 原文件，
+ * 只有路径能把真英文文件和 fallback 区分开。
  */
 export function isEnglishPage(page: Page): boolean {
-  const lang = (page.data as PageData).lang;
-  return lang === "en";
+  return isEnglishFile(page.path);
 }

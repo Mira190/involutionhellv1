@@ -14,10 +14,11 @@ export const dynamic = "force-static";
  */
 const api = createSearchAPI("advanced", {
   // Dynamic 形式：createSearchAPI 期望 () => T[] | Promise<T[]>，不是裸 Promise
+  // getPages("zh") = 中文页面表（.en 文件天然不在其中；filter 兜底防御）
   indexes: () =>
     Promise.all(
       source
-        .getPages()
+        .getPages("zh")
         .filter((page) => !isEnglishPage(page))
         .map(pageToIndex),
     ),

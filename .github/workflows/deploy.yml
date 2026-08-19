@@ -104,13 +104,19 @@ jobs:
               # index.mdx 对应目录本身的 URL（fumadocs 约定）
               slug="${slug%/index}"
 
-              # leetcode 中文 stem → 拼音 slug 映射（与 source.ts transformer 一致）
+              # leetcode 中文 stem → canonical 路径映射（与 source.ts transformer 一致）。
+              # map 结构是 {byName, byNumber}，value 是带 locale 前缀的完整路径
+              # （如 /en/docs/career/interview-prep/leetcode/xxx），不是裸 slug——
+              # 剥掉 locale 前缀取出 docs 路径，再按两个 locale 拼 URL。
               if [[ "$slug" == "$LEETCODE_PREFIX"* && -f "$SLUG_MAP_FILE" ]]; then
                 stem="${slug##*/}"
-                dir="${slug%/*}"
-                mapped="$(jq -r --arg k "$stem" '.[$k] // empty' "$SLUG_MAP_FILE")"
+                mapped="$(jq -r --arg k "$stem" '.byName[$k] // empty' "$SLUG_MAP_FILE")"
                 if [ -n "$mapped" ]; then
-                  slug="$dir/$mapped"
+                  docs_path="${mapped#/zh}"
+                  docs_path="${docs_path#/en}"
+                  URLS+=("$SITE_ORIGIN/zh$docs_path")
+                  URLS+=("$SITE_ORIGIN/en$docs_path")
+                  continue
                 fi
               fi
 

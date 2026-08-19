@@ -17,6 +17,7 @@ import { docPathname, isDraftOrHidden } from "@/lib/doc-entry";
 import { buildLlmsTxt, type LlmsTxtEntry } from "@/lib/llms-txt";
 import { SITE_URL } from "@/lib/site-url";
 import { source } from "@/lib/source";
+import { isEnglishFile } from "@/lib/translation-status";
 
 export const dynamic = "force-static";
 
@@ -30,6 +31,9 @@ export function GET() {
     for (const page of source.getPages(locale)) {
       // 和 sitemap 同一套过滤：草稿泄漏给 AI 引擎和泄漏给搜索引擎一样糟
       if (isDraftOrHidden(page)) continue;
+      // fallback 排除（同 sitemap）：en 页面表里被 fallbackLanguage 继承的
+      // zh 原文件，在 "English" 分组下列中文标题只会误导抓取方
+      if (locale === "en" && !isEnglishFile(page.path)) continue;
 
       const data = (page.data ?? {}) as PageData;
       // slugs[0] 是顶层分区（career / learn / projects），拿来当分组

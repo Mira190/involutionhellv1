@@ -510,5 +510,13 @@
   },
   "shareLink": {
     "button": "丢个链接"
+  },
+  "translationNotice": {
+    "machine": "本页面由 AI 从{source}原文机器翻译，未经全面人工校对，可能存在错误；相对原作有改动。",
+    "readOriginal": "阅读原文",
+    "license": "原作版权归贡献者所有，CC BY-NC-SA 4.0 许可。",
+    "fallback": "本页暂无翻译版本，当前显示中文原文。",
+    "sourceZh": "中文",
+    "sourceEn": "英文"
   }
 }

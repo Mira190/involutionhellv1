@@ -20,6 +20,9 @@ export interface PageData {
   hidden?: boolean;
   docId?: string;
   lang?: string;
+  translatedFrom?: string;
+  translatedAt?: DateLike;
+  translatorAgent?: string;
   structuredData?: StructuredData;
   load?: () => Promise<{ structuredData: StructuredData }>;
   /**

@@ -18,6 +18,8 @@ import {
 import { Contributors } from "@/app/components/Contributors";
 import { DocsAssistant } from "@/app/components/DocsAssistant";
 import { LicenseNotice } from "@/app/components/LicenseNotice";
+import { TranslationNotice } from "@/app/components/TranslationNotice";
+import { getTranslationStatus, isEnglishFile } from "@/lib/translation-status";
 import { PageFeedback } from "@/app/components/PageFeedback";
 import { DocHistoryPanel } from "@/app/components/DocHistoryPanel";
 import { DocShareButton } from "@/app/components/DocShareButton";
@@ -137,6 +139,11 @@ export default async function DocPage({ params }: Param) {
     locale,
   });
 
+  // 翻译状态：机翻页出合规标注 + JSON-LD 溯源；fallback 页（/en URL 渲染
+  // zh 原文）inLanguage 必须如实标 zh-Hans，不能跟着 URL locale 撒谎
+  const translationStatus = getTranslationStatus(page, locale);
+  const contentIsEnglish = locale === "en" && isEnglishFile(page.path);
+
   // TechArticle: 让 docs 在 Google 搜索结果上更可能展示为技术文章卡片
   const articleJsonLd = {
     "@context": "https://schema.org",
@@ -144,12 +151,26 @@ export default async function DocPage({ params }: Param) {
     headline: page.data.title,
     description: articleDescription,
     url: docUrl,
-    inLanguage: locale === "en" ? "en-US" : "zh-CN",
+    inLanguage: contentIsEnglish ? "en" : "zh-Hans",
     publisher: {
       "@type": "Organization",
       name: "Involution Hell",
       url: SITE_URL,
     },
+    // 机翻页的机器可读溯源（《AI 生成合成内容标识办法》的隐式标识 +
+    // schema.org 溯源）：指回原文 URL，标注翻译主体
+    ...(translationStatus.kind === "translation"
+      ? {
+          translationOfWork: {
+            "@type": "TechArticle",
+            "@id": `${SITE_URL}/${translationStatus.translatedFrom}/docs/${slugPath}`,
+          },
+          translator: {
+            "@type": "SoftwareApplication",
+            name: translationStatus.translatorAgent ?? "AI machine translation",
+          },
+        }
+      : {}),
   };
 
   // BreadcrumbList: 按 slug 层级生成面包屑
@@ -195,6 +216,11 @@ export default async function DocPage({ params }: Param) {
               <EditOnGithub href={editUrl} />
             </div>
           </div>
+          <TranslationNotice
+            status={translationStatus}
+            slugPath={slugPath}
+            className="mb-6"
+          />
           <Mdx components={getMDXComponents()} />
           <Contributors entry={contributorsEntry} />
           <PageFeedback />
@@ -249,23 +275,34 @@ export async function generateMetadata({ params }: Param): Promise<Metadata> {
     notFound();
   }
 
-  // canonical: 当前 locale 的本语言 URL（每个语言独立 canonical，避免 zh/en
-  // 互相竞争 PageRank）。
   const slugPath = (slug ?? []).join("/");
-  const canonical = slugPath
-    ? `/${locale}/docs/${slugPath}`
-    : `/${locale}/docs`;
+  const zhUrl = slugPath ? `/zh/docs/${slugPath}` : "/zh/docs";
+  const enUrl = slugPath ? `/en/docs/${slugPath}` : "/en/docs";
 
-  // hreflang：告诉 Google 同一文档的另一语言 URL 在哪。
-  const langs: Record<string, string> = {};
-  for (const l of routing.locales) {
-    const url = slugPath ? `/${l}/docs/${slugPath}` : `/${l}/docs`;
-    langs[l === "en" ? "en-US" : "zh-CN"] = url;
+  // 配对现实检查：不能对着 URL 参数空喊 hreflang——
+  //   - /en URL 可能渲染的是 fallback（zh 原文），此时宣告 en-US 是对
+  //     Google 撒谎（重复内容 + 错语言信号），canonical 必须指回 zh
+  //   - en-only 孤儿页的 zh URL 是 404，宣告 zh alternate 会让整组
+  //     hreflang 因互指失败被忽略
+  // 语言码用 zh-Hans（按文字不锁地区，受众是海外简中读者）/ en。
+  const enPage = locale === "en" ? page : source.getPage(slug, "en");
+  const enIsReal = enPage != null && isEnglishFile(enPage.path);
+  const zhExists = locale === "zh" ? true : source.getPage(slug, "zh") != null;
+  const hasPair = zhExists && enIsReal;
+
+  let canonical: string;
+  let langs: Record<string, string> | undefined;
+  if (locale === "en" && !enIsReal) {
+    // fallback：正文是中文原文，canonical 指向 zh 版，本页不进 hreflang 集群
+    canonical = zhUrl;
+    langs = undefined;
+  } else {
+    canonical = locale === "en" ? enUrl : zhUrl;
+    // 只有真实配对才输出 hreflang；单语言页无 alternate 可宣告
+    langs = hasPair
+      ? { "zh-Hans": zhUrl, en: enUrl, "x-default": zhUrl }
+      : undefined;
   }
-  langs["x-default"] = `/${routing.defaultLocale}/docs/${slugPath}`.replace(
-    /\/$/,
-    "",
-  );
 
   // SEO description 兜底：page.data.description 可能为 undefined/空/极短
   // （96 个 leetcode 题解完全没 description，67 个空，35 个 < 20 字符）。
@@ -284,7 +321,7 @@ export async function generateMetadata({ params }: Param): Promise<Metadata> {
   return {
     title: page.data.title,
     description: safeDescription,
-    alternates: { canonical, languages: langs },
+    alternates: { canonical, ...(langs ? { languages: langs } : {}) },
     openGraph: {
       type: "article",
       title: page.data.title,

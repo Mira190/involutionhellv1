@@ -5,7 +5,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import {
+  useRouter as useLocaleRouter,
+  usePathname as useLocalePathname,
+} from "@/i18n/navigation";
 import { useAuth } from "@/lib/use-auth";
 import { useTheme } from "@/app/components/ThemeProvider";
 
@@ -28,14 +32,6 @@ function getToken(): string | null {
   return localStorage.getItem("satoken");
 }
 
-// 从 document.cookie 读取 locale，返回 "zh" | "en" | null
-function getLocaleCookie(): "zh" | "en" | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(/(?:^|;\s*)locale=([^;]+)/);
-  const val = match?.[1];
-  return val === "zh" || val === "en" ? val : null;
-}
-
 // 骨架屏占位
 function SkeletonRow() {
   return (
@@ -50,14 +46,19 @@ export function SettingsForm() {
   const { status } = useAuth();
   const { theme: currentTheme, setTheme } = useTheme();
   const router = useRouter();
+  // URL 段化路由下语言由 URL locale 段决定（cookie 只是 middleware 的
+  // 记忆），切换必须走 next-intl router 换 URL —— 与 LocaleToggle 同机制
+  const activeLocale = useLocale() as UserPreferences["language"];
+  const localeRouter = useLocaleRouter();
+  const localePathname = useLocalePathname();
   const t = useTranslations("settings");
 
   // 初始值：主题从 ThemeProvider 读（避免表单与页面实际主题不一致），
-  // 语言从 locale cookie 读（与 middleware 写的值保持同步）
+  // 语言从当前 URL locale 读
   const [prefs, setPrefs] = useState<UserPreferences>(() => ({
     ...DEFAULT_PREFS,
     theme: currentTheme as UserPreferences["theme"],
-    language: getLocaleCookie() ?? DEFAULT_PREFS.language,
+    language: activeLocale,
   }));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -166,10 +167,11 @@ export function SettingsForm() {
         setPrefs(merged);
         // 主题变化立即同步到 ThemeProvider（同步写 localStorage）
         setTheme(merged.theme);
-        // 语言变化写回 cookie，供文档页 Server Component 读取
-        document.cookie = `locale=${merged.language};path=/;max-age=${60 * 60 * 24 * 365};samesite=lax`;
-        // Server Component（文档 sidebar / 正文）读 cookie，必须刷新 RSC 才能反映新 locale
-        router.refresh();
+        // 语言变化 = 切到另一 locale 的同一 URL（next-intl 会同步
+        // NEXT_LOCALE cookie）；语言没变就不动
+        if (merged.language !== activeLocale) {
+          localeRouter.replace(localePathname, { locale: merged.language });
+        }
       }
       showToast("success", t("toast.saveSuccess"));
     } catch {
@@ -267,10 +269,12 @@ export function SettingsForm() {
               type="button"
               onClick={() => {
                 setPrefs((p) => ({ ...p, language: value }));
-                // 写 cookie 覆盖 middleware 的 IP 判断，让文档页 Server Component 读取
-                document.cookie = `locale=${value};path=/;max-age=${60 * 60 * 24 * 365};samesite=lax`;
-                // 立即刷新 RSC，让 sidebar / 正文按新 locale 重渲染（不刷会看起来没生效）
-                router.refresh();
+                // 切 URL locale 段（旧的写 locale cookie + refresh 机制在
+                // URL 段化路由下不生效：URL 优先，且 middleware 读的是
+                // NEXT_LOCALE cookie）
+                if (value !== activeLocale) {
+                  localeRouter.replace(localePathname, { locale: value });
+                }
               }}
               className={`flex-1 py-2 px-4 font-mono text-sm uppercase transition-colors ${
                 prefs.language === value

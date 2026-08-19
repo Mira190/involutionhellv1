@@ -24,6 +24,7 @@ import { routing, type Locale } from "@/i18n/routing";
 import { type PageData, type DateLike } from "@/app/types/doc";
 // 和 app/llms.txt/route.ts 共用，避免两边对 draft 过滤 / slug 编码各写一份
 import { docPathname, isDraftOrHidden } from "@/lib/doc-entry";
+import { isEnglishFile } from "@/lib/translation-status";
 
 type SourcePage = ReturnType<typeof source.getPages>[number];
 
@@ -72,12 +73,28 @@ export default function sitemap(): MetadataRoute.Sitemap {
     );
   }
 
-  // 2. 文档页面：每个 locale 拿一份，按 fumadocs i18n 接口取
+  // 2. 文档页面：每个 locale 拿一份，按 fumadocs i18n 接口取。
+  //
+  // fallback 排除 + 配对感知（不能无脑双语双份）：
+  //   - en 页面表包含 fallbackLanguage 继承的 zh 原文件——那些 /en URL 渲染
+  //     中文正文，进 sitemap 等于给 Google 报重复内容，跳过
+  //   - alternates 只在真实配对存在时输出；en-only 孤儿页的 zh URL 是 404，
+  //     宣告出去 hreflang 互指失败整组作废
+  const realEnSlugs = new Set(
+    source
+      .getPages("en")
+      .filter((p) => isEnglishFile(p.path))
+      .map((p) => p.slugs.join("/")),
+  );
+  const zhSlugs = new Set(source.getPages("zh").map((p) => p.slugs.join("/")));
   for (const locale of routing.locales) {
     const pages = source.getPages(locale);
     for (const page of pages) {
       if (isDraftOrHidden(page)) continue;
-      const entry = buildDocsEntry(page, locale);
+      if (locale === "en" && !isEnglishFile(page.path)) continue;
+      const slugKey = page.slugs.join("/");
+      const hasPair = realEnSlugs.has(slugKey) && zhSlugs.has(slugKey);
+      const entry = buildDocsEntry(page, locale, hasPair);
       entries.push(entry);
       if (entry.lastModified instanceof Date) {
         if (!latestDocDate || entry.lastModified > latestDocDate) {
@@ -120,11 +137,16 @@ interface BuildLocaleEntryArgs {
   >;
   priority: number;
   lastModified?: Date;
+  /** false = 不输出 alternates（单语言页 / 对语言 URL 不存在） */
+  withAlternates?: boolean;
 }
 
 /**
- * 通用：给 (pathname, locale) 构建一条 sitemap 入口，自动填 alternates.languages
- * 列出其它 locale 的 URL，让 Google 正确建立 hreflang 关系。
+ * 通用：给 (pathname, locale) 构建一条 sitemap 入口。
+ *
+ * hreflang 语言码与 generateMetadata（docs page.tsx）保持字节一致：
+ * zh-Hans / en + x-default 指 zh —— head 与 sitemap 两个声明源不一致是
+ * Google 文档明确警告的冲突模式。
  */
 function buildLocaleEntry({
   pathname,
@@ -132,18 +154,20 @@ function buildLocaleEntry({
   changeFrequency,
   priority,
   lastModified,
+  withAlternates = true,
 }: BuildLocaleEntryArgs): MetadataRoute.Sitemap[number] {
   const url = `${SITE_URL}/${currentLocale}${pathname}`;
-  const languages: Record<string, string> = {};
-  for (const l of routing.locales) {
-    languages[l === "en" ? "en-US" : "zh-CN"] = `${SITE_URL}/${l}${pathname}`;
-  }
+  const languages: Record<string, string> = {
+    "zh-Hans": `${SITE_URL}/zh${pathname}`,
+    en: `${SITE_URL}/en${pathname}`,
+    "x-default": `${SITE_URL}/zh${pathname}`,
+  };
   return {
     url,
     changeFrequency,
     priority,
     ...(lastModified ? { lastModified } : {}),
-    alternates: { languages },
+    ...(withAlternates ? { alternates: { languages } } : {}),
   };
 }
 
@@ -156,6 +180,7 @@ function buildLocaleEntry({
 function buildDocsEntry(
   page: SourcePage,
   locale: Locale,
+  hasPair: boolean,
 ): MetadataRoute.Sitemap[number] {
   const pathname = docPathname(page.slugs);
   const fmDate = extractDateFromPage(page);
@@ -165,6 +190,7 @@ function buildDocsEntry(
     changeFrequency: "monthly",
     priority: 0.6,
     lastModified: fmDate,
+    withAlternates: hasPair,
   });
 }
 

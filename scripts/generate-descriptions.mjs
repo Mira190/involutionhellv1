@@ -58,7 +58,9 @@ const BODY_CHARS_FOR_LLM = 800; // 给 LLM 的正文截取长度
 const DEEPSEEK_BASE = (
   process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com"
 ).replace(/\/+$/, "");
-const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+// deepseek-chat 已随 2026-07 模型线更替下线；跑之前对 api-docs.deepseek.com
+// 核对现役 ID，必要时用 DEEPSEEK_MODEL 覆盖
+const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";
 
 /**
  * 判断文件是否英文页面（.en.{md,mdx} 后缀）
